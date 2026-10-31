@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { addBox, addCyl, makePrism, buildStrip, disposeTree } from './geometry.js';
 import { placeLandmarks } from './landmarks.js';
 import {
-  makeBuildingTexture, makeRoadTexture, makeSidewalkTexture, makeGrassTexture,
+  makeBuildingTexture, makeGlassTowerTexture, makeRoadTexture, makeSidewalkTexture, makeGrassTexture,
   makeDirtTexture, makeConcreteTexture, makeWaterTexture, makeSignTexture,
   makeStripeTexture, makeTentTexture
 } from './textures.js';
@@ -33,7 +33,8 @@ export function resetMatCache() { MAT = null; }
 // ================= BUILDINGS =================
 function makeBuilding(rng, M, facadeTex, w, d, h) {
   const g = new THREE.Group();
-  const sideMat = new THREE.MeshLambertMaterial({ color: 0x6a4230, flatShading: true });
+  const sideColor = rng.pick([0x6a4230, 0x5c5a54, 0x7a6a58, 0x4e4a44, 0x6b5a4a]);
+  const sideMat = new THREE.MeshLambertMaterial({ color: sideColor, flatShading: true });
   const topMat = M.roof;
   const botMat = new THREE.MeshLambertMaterial({ color: 0x5e3a28, flatShading: true });
   const body = new THREE.Mesh(
@@ -44,6 +45,9 @@ function makeBuilding(rng, M, facadeTex, w, d, h) {
   g.add(body);
   // Parapet / roof edge
   addBox(g, w + 0.4, 0.5, d + 0.4, 0, h + 0.25, 0, M.roof);
+  // Ground-floor band at street level (darker plinth + glass line)
+  addBox(g, w + 0.12, 1.1, d + 0.12, 0, 0.55, 0, new THREE.MeshLambertMaterial({ color: 0x241f1a, flatShading: true }));
+  addBox(g, w + 0.16, 0.14, d + 0.16, 0, 1.18, 0, new THREE.MeshLambertMaterial({ color: 0xb8a888, flatShading: true }));
   // Storefront awning on the facade (+z) sometimes
   if (rng.chance(0.6)) {
     const aw = addBox(g, w * 0.8, 0.3, 1.4, 0, 3.4, d / 2 + 0.7,
@@ -51,6 +55,16 @@ function makeBuilding(rng, M, facadeTex, w, d, h) {
         rng.pick(['#c23a3a', '#3a5a8a', '#b03a7a', '#d8b83e']), '#f0ead8'), flatShading: true }));
     aw.rotation.x = 0.18;
   }
+  // Setback upper floor on taller buildings — real city silhouettes step back
+  if (h > 12 && rng.chance(0.45)) {
+    const uh = rng.range(3.5, 7);
+    addBox(g, w * 0.62, uh, d * 0.62, rng.range(-1.5, 1.5), h + uh / 2 + 0.4, rng.range(-1.5, 1.5), sideMat);
+    addBox(g, w * 0.62 + 0.3, 0.35, d * 0.62 + 0.3, 0, h + uh + 0.55, 0, M.roof);
+  }
+  // Roof clutter: water tanks, AC units, vents
+  if (rng.chance(0.4)) addCyl(g, 0.9, 0.9, 1.6, rng.range(-w * 0.25, w * 0.25), h + 1.1, rng.range(-d * 0.25, d * 0.25), M.woodDark, 8);
+  if (rng.chance(0.5)) addBox(g, 1.4, 0.8, 1.0, rng.range(-w * 0.3, w * 0.3), h + 0.7, rng.range(-d * 0.3, d * 0.3), M.metal);
+  if (rng.chance(0.3)) addCyl(g, 0.22, 0.26, 1.1, rng.range(-w * 0.3, w * 0.3), h + 0.85, rng.range(-d * 0.3, d * 0.3), M.darkMetal, 6);
   return g;
 }
 
@@ -504,10 +518,12 @@ export function buildWorld(scene, curve, levelData, rng) {
 
   // ---- Facade texture pool ----
   const facades = [];
-  for (let i = 0; i < 10; i++) {
-    facades.push(makeBuildingTexture(rng, rng.pick(['#7a4a32', '#6e4430', '#83563c', '#5e3a28']),
-      rng.int(2, 4), rng.int(3, 5), 0.3));
+  const FACADE_COLORS = ['#7a4a32', '#6e4430', '#83563c', '#5e3a28', '#8a8578', '#6b7a80', '#9c7a5a', '#7a6a58', '#84413a', '#5f6b74'];
+  for (let i = 0; i < 12; i++) {
+    facades.push(makeBuildingTexture(rng, FACADE_COLORS[i % FACADE_COLORS.length], rng.int(2, 5), rng.int(3, 5), 0.3));
   }
+  const glassFacades = [];
+  for (let i = 0; i < 4; i++) glassFacades.push(makeGlassTowerTexture(rng, rng.int(6, 9), rng.int(3, 5), 0.2));
 
   // ---- Solid footprint registry ----
   // Level structures are placed FIRST; buildings and props skip any spot whose
@@ -570,8 +586,11 @@ export function buildWorld(scene, curve, levelData, rng) {
       const bx = p.x - right.x * side * dist;
       const bz = p.z - right.z * side * dist;
       const bw = rng.range(8, 14), bd = rng.range(7, 11);
-      const bh = (w.theme === 'downtown' ? rng.int(3, 5) : rng.int(2, 3)) * 4.2;
-      const b = makeBuilding(rng, M, facades[bi++ % facades.length], bw, bd, bh);
+      const bh = (w.theme === 'downtown' ? rng.int(3, 6) : rng.int(2, 3)) * 4.2;
+      const tex = (w.theme === 'downtown' && rng.chance(0.45))
+        ? glassFacades[bi++ % glassFacades.length]
+        : facades[bi++ % facades.length];
+      const b = makeBuilding(rng, M, tex, bw, bd, bh);
       // Face facade (+z) toward the road center.
       const fx = p.x - bx, fz = p.z - bz;
       b.rotation.y = Math.atan2(fx, fz);
@@ -597,6 +616,33 @@ export function buildWorld(scene, curve, levelData, rng) {
       const up = makeUtilityPole(M);
       up.position.set(p.x + right.x * side * d, 0, p.z + right.z * side * d);
       if (!hitsSolid(up, 0.3)) worldRoot.add(up);
+    }
+  }
+
+  // ---- Street furniture: hydrants + trash cans enliven sidewalks ----
+  if (w.theme === 'city' || w.theme === 'downtown' || w.theme === 'fair') {
+    for (let u = 0.03; u < 0.97; u += rng.range(0.05, 0.09)) {
+      curve.getPointAt(u, p);
+      curve.getTangentAt(u, t);
+      right.set(-t.z, 0, t.x).normalize();
+      const side = rng.sign();
+      const d = roadWidth / 2 + rng.range(1.6, 2.6);
+      let prop = null;
+      if (rng.chance(0.45)) {
+        prop = new THREE.Group();
+        addCyl(prop, 0.16, 0.2, 0.72, 0, 0.36, 0, M.red, 7);
+        addBox(prop, 0.5, 0.12, 0.12, 0, 0.56, 0, M.red);
+        addCyl(prop, 0.1, 0.1, 0.18, 0, 0.8, 0, M.red, 6);
+      } else {
+        prop = new THREE.Group();
+        const canMat = rng.chance(0.5) ? M.darkMetal
+          : new THREE.MeshLambertMaterial({ color: 0x3a5a4a, flatShading: true });
+        addCyl(prop, 0.3, 0.34, 0.85, 0, 0.42, 0, canMat, 8);
+        addBox(prop, 0.66, 0.08, 0.66, 0, 0.88, 0, M.darkMetal);
+      }
+      prop.position.set(p.x - right.x * side * d, 0, p.z - right.z * side * d);
+      prop.rotation.y = Math.atan2(t.x, t.z);
+      if (!hitsSolid(prop, 0.15)) { worldRoot.add(prop); rememberSolid(prop); }
     }
   }
 
