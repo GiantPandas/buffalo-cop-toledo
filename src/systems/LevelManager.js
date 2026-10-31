@@ -230,7 +230,8 @@ export class LevelManager {
     // Place NPCs.
     for (const n of data.npcs || []) {
       const pos = this._posAlong(n.u, n.side, n.dist);
-      game.enemyManager.spawnNPC(n.kind, pos);
+      const npc = game.enemyManager.spawnNPC(n.kind, pos);
+      if (npc) this._clearFromSolids(npc.group, npc.homePos, n.u, n.side, n.dist, 4.2);
     }
 
     // Place shootables.
@@ -244,6 +245,7 @@ export class LevelManager {
       const p2 = this.rail.sampleAt(s.u, new THREE.Vector3());
       const dx = p2.x - pos.x, dz = p2.z - pos.z;
       group.rotation.y = Math.atan2(dx, dz);
+      this._clearFromSolids(group, null, s.u, s.side, s.dist, 3.6);
       if (s.type === 'balloon') {
         // Balloons bob.
         this.world.anims.push((dt, time) => { group.position.y = Math.sin(time * 1.4 + s.u * 9) * 0.15; });
@@ -282,6 +284,26 @@ export class LevelManager {
       p.x + right.x * (side || 0) * (dist || 0),
       0,
       p.z + right.z * (side || 0) * (dist || 0));
+  }
+
+  // Slide a roadside prop toward the road until its Box3 clears all solid
+  // world footprints (buildings/structures). Keeps NPC homePos in sync via pos.
+  _clearFromSolids(group, pos, u, side, dist, minDist) {
+    const boxes = this.world && this.world.solidBoxes;
+    if (!boxes || !boxes.length) return;
+    const box = new THREE.Box3();
+    const probe = (d) => {
+      group.position.copy(this._posAlong(u, side, d));
+      group.updateMatrixWorld(true);
+      box.setFromObject(group);
+      return !boxes.some((b) => b.intersectsBox(box));
+    };
+    for (let d = dist; d >= minDist; d -= 0.8) {
+      if (probe(d)) { if (pos) pos.copy(group.position); return; }
+    }
+    group.position.copy(this._posAlong(u, side, minDist));
+    group.updateMatrixWorld(true);
+    if (pos) pos.copy(group.position);
   }
 
   // ---------- ON-ROAD SPAWNING ----------

@@ -115,6 +115,7 @@ html, body {
 
 #hitmarker {
   position: fixed; z-index: 26; pointer-events: none; width: 30px; height: 30px; margin: -15px 0 0 -15px;
+  opacity: 0; /* base invisible; the flash animation carries the fade */
 }
 #hitmarker::before, #hitmarker::after {
   content: ""; position: absolute; left: 50%; top: 50%; width: 26px; height: 3px; background: #fff;
@@ -122,8 +123,8 @@ html, body {
 }
 #hitmarker::before { transform: translate(-50%,-50%) rotate(45deg); }
 #hitmarker::after { transform: translate(-50%,-50%) rotate(-45deg); }
-#hitmarker.flash { animation: hitmark 0.18s ease-out; }
-@keyframes hitmark { from { opacity: 1; transform: scale(1.6);} to { opacity: 0; transform: scale(0.7);} }
+#hitmarker.flash { animation: hitmark 0.26s ease-out forwards; }
+@keyframes hitmark { 0% { opacity: 1; transform: scale(1.5);} 55% { opacity: 0.75; } 100% { opacity: 0; transform: scale(0.8);} }
 
 /* ---------- ANNOUNCER / BIG TEXT ---------- */
 #announce {

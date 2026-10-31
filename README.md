@@ -57,6 +57,8 @@ comes down the road.
 - **BARREL CHAINS** — a shot barrel blasts every buffalo within 6.5m (flat points, no combo inflation) and detonates barrels within 8m, chaining up to 3 deep. The boss takes 1 damage per blast. Logic: `Game.barrelBlast` + the `barrel` case in `src/systems/LevelManager.js`.
 - **DONUT BANDIT** — a fast lateral runner carrying a stolen donut on its head (head accessories count as headshots). hp 2; kill it for +400 and a sprinkle burst, or watch the donut flee. Behavior: `src/enemies/Buffalo.js` (`bandit`), model: `src/world/buffaloModel.js`.
 - **SPAWN DIRECTOR** — encounters never land in your face and never stack. Spawn distance is derived from the rail's live speed (`RailSystem.speedAt`) with per-type reaction budgets (chargers spawn ≥28m out), aggressive buffalo telegraph at 21m, a fresh wave is held back while ≥14 buffalo are alive (queued, fires when the road clears or after 5s), and anything the rail has passed despawns off-stage. Every arrival gets a dust puff + low thud so you notice it. Logic: `LevelManager._fireEncounter`.
+- **COLLISION-AWARE WORLD BUILD** — level structures (barns, feed stores, ferris wheels…) place first, then buildings and street props (parked cars, trees, lights, tents, pens…) are rejected if their `Box3` footprint would clip into anything solid; NPCs and shootable props slide toward the road until they clear. Nothing spawns inside a building anymore. Logic: `solidBoxes` registry in `src/world/ProceduralWorld.js` + `LevelManager._clearFromSolids`.
+- **MUSIC** — a 4-bar lookahead sequencer per intensity track (menu/explore/encounter/herd/boss/victory/gameover): chord pads walk a progression, bass and lead get distinct per-bar variations with fills, humanized drums (ghost hats, velocity jitter, open hats, tom fills, crash on phrase tops) and an echo bus under the lead. Logic: `TRACKS` + `_playStep` in `src/core/AudioManager.js`.
 
 ## Upgrades (roguelike)
 
@@ -181,6 +183,8 @@ scripts/
 ```bash
 node scripts/smoke.js            # logic tests (no browser needed)
 node scripts/headless-test.mjs   # full in-browser integration test (needs Chrome)
+node scripts/music-probe.mjs     # drives the music sequencer with a mock AudioContext
+node scripts/spawn-audit.mjs     # reports spawn pacing per level (reaction times, alive peaks)
 ```
 
 The headless test boots the built game (`dist/`) in headless Chrome, drives the
