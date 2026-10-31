@@ -537,6 +537,28 @@ export function buildWorld(scene, curve, levelData, rng) {
     if (margin > 0) _test.expandByScalar(-margin);
     return solidBoxes.some((b) => b.intersectsBox(_test));
   };
+  // ---- Road clearance guard: nothing LOW may intrude into the roadway ----
+  // Overhead structures (crane booms, box max.y > 2.6) are exempt; anything
+  // shorter whose footprint reaches the asphalt is rejected by callers.
+  const _roadPts = [];
+  for (let i = 0; i <= 64; i++) _roadPts.push(curve.getPointAt(i / 64, new THREE.Vector3()));
+  const _rc = new THREE.Box3(), _corner = new THREE.Vector3();
+  const crossesRoad = (obj, extra = 0.4) => {
+    obj.updateMatrixWorld(true);
+    _rc.setFromObject(obj);
+    if (_rc.max.y > 2.6) return false; // pass under, not across
+    const reach = roadWidth / 2 + extra;
+    const r2 = reach * reach;
+    for (let cx = 0; cx < 2; cx++) {
+      for (let cz = 0; cz < 2; cz++) {
+        _corner.set(cx ? _rc.max.x : _rc.min.x, 0, cz ? _rc.max.z : _rc.min.z);
+        for (let i = 0; i < _roadPts.length; i++) {
+          if (_corner.distanceToSquared(_roadPts[i]) < r2) return true;
+        }
+      }
+    }
+    return false;
+  };
   const p = new THREE.Vector3(), t = new THREE.Vector3(), right = new THREE.Vector3();
 
   // ---- Placed structures (from level data) ----
@@ -562,17 +584,26 @@ export function buildWorld(scene, curve, levelData, rng) {
       case 'trafficlight': obj = makeTrafficLight(M); break;
     }
     if (!obj) continue;
-    // Face toward road unless a custom ry is given.
-    const fx = p.x - x, fz = p.z - z;
-    obj.rotation.y = s.ry != null ? s.ry : Math.atan2(fx, fz);
-    obj.position.set(x, 0, z);
+    // Face toward the road unless a custom ry is given; nudge outward if the
+    // footprint would wall off the roadway (curves pull the road sideways).
+    let dd = dist, blocked = false;
+    for (let tries = 0; tries < 4; tries++) {
+      const px = p.x - right.x * s.side * dd;
+      const pz = p.z - right.z * s.side * dd;
+      obj.position.set(px, 0, pz);
+      obj.rotation.y = s.ry != null ? s.ry : Math.atan2(p.x - px, p.z - pz);
+      blocked = crossesRoad(obj, 0.3);
+      if (!blocked) break;
+      dd += 1.6;
+    }
+    if (blocked) continue;
     worldRoot.add(obj);
     rememberSolid(obj);
     if (update) anims.push(update);
   }
 
   // ---- Toledo landmarks (stylized real Glass City structures) ----
-  placeLandmarks({ theme: w.theme, rng, M, curve, roadWidth, riverSide: w.riverSide || 0, worldRoot, anims, rememberSolid, hitsSolid });
+  placeLandmarks({ theme: w.theme, rng, M, curve, roadWidth, riverSide: w.riverSide || 0, worldRoot, anims, rememberSolid, hitsSolid, roadCheck: crossesRoad });
 
   // ---- Buildings along both sides ----
   let bi = 0;
@@ -642,7 +673,7 @@ export function buildWorld(scene, curve, levelData, rng) {
       }
       prop.position.set(p.x - right.x * side * d, 0, p.z - right.z * side * d);
       prop.rotation.y = Math.atan2(t.x, t.z);
-      if (!hitsSolid(prop, 0.15)) { worldRoot.add(prop); rememberSolid(prop); }
+      if (!hitsSolid(prop, 0.15) && !crossesRoad(prop, 0.3)) { worldRoot.add(prop); rememberSolid(prop); }
     }
   }
 
@@ -654,11 +685,12 @@ export function buildWorld(scene, curve, levelData, rng) {
     curve.getTangentAt(u, t);
     right.set(-t.z, 0, t.x).normalize();
     const side = rng.sign();
-    const d = roadWidth / 2 + 1.4;
+    const rotated = rng.chance(0.3);
+    const d = roadWidth / 2 + (rotated ? 3.6 : 1.4); // rotated cars lie sideways: keep further out
     const car = makeCar(M, rng.pick(carColors));
     car.position.set(p.x - right.x * side * d, 0, p.z - right.z * side * d);
-    car.rotation.y = Math.atan2(t.x, t.z) + (rng.chance(0.3) ? Math.PI / 2 : 0);
-    if (!hitsSolid(car, 0.3)) worldRoot.add(car);
+    car.rotation.y = Math.atan2(t.x, t.z) + (rotated ? Math.PI / 2 : 0);
+    if (!hitsSolid(car, 0.3) && !crossesRoad(car, 0.3)) worldRoot.add(car);
   }
 
   // ---- Theme extras ----
@@ -677,17 +709,23 @@ export function buildWorld(scene, curve, levelData, rng) {
       if (!hitsSolid(tree, 0.4)) worldRoot.add(tree);
     }
     if (w.theme === 'city' && w.riverSide) {
-      // Bridge over the river near the start
+      // Bridge spans the river: deck crosses the road direction (narrow along
+      // the tangent), placed clear of the roadway, piers in the water.
       curve.getPointAt(0.12, p);
       curve.getTangentAt(0.12, t);
       right.set(-t.z, 0, t.x).normalize();
       const bridge = new THREE.Group();
-      addBox(bridge, roadWidth + 8, 0.6, 14, 0, 0.5, 0, M.concreteTex);
-      addBox(bridge, roadWidth + 8, 0.8, 0.5, 0, 1.2, -7, M.concrete);
-      addBox(bridge, roadWidth + 8, 0.8, 0.5, 0, 1.2, 7, M.concrete);
-      bridge.position.set(p.x - right.x * w.riverSide * (roadWidth / 2 + 9), 0, p.z - right.z * w.riverSide * (roadWidth / 2 + 9));
+      addBox(bridge, 9, 0.7, 20, 0, 0.75, 0, M.concreteTex);
+      addBox(bridge, 0.6, 0.9, 20, -4.2, 1.35, 0, M.concrete);
+      addBox(bridge, 0.6, 0.9, 20, 4.2, 1.35, 0, M.concrete);
+      addBox(bridge, 1.4, 2.4, 1.4, 0, 0.1, -5.5, M.concrete);
+      addBox(bridge, 1.4, 2.4, 1.4, 0, 0.1, 5.5, M.concrete);
+      bridge.position.set(
+        p.x - right.x * w.riverSide * (roadWidth / 2 + 12), 0.35,
+        p.z - right.z * w.riverSide * (roadWidth / 2 + 12)
+      );
       bridge.rotation.y = Math.atan2(right.x, right.z);
-      if (!hitsSolid(bridge, 0.5)) worldRoot.add(bridge);
+      if (!hitsSolid(bridge, 0.5) && !crossesRoad(bridge, 0.8)) { worldRoot.add(bridge); rememberSolid(bridge); }
     }
   }
 

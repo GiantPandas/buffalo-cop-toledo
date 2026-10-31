@@ -306,7 +306,7 @@ export function buildSkylineStrip(rng, curve, { side, dist, count, base = '#232a
 // ---------------------------------------------------------------- placement
 
 export function placeLandmarks(ctx) {
-  const { theme, rng, M, curve, roadWidth, riverSide, worldRoot, anims, rememberSolid, hitsSolid } = ctx;
+  const { theme, rng, M, curve, roadWidth, riverSide, worldRoot, anims, rememberSolid, hitsSolid, roadCheck } = ctx;
   const half = roadWidth / 2;
   const landSide = riverSide ? -riverSide : (rng.chance(0.5) ? 1 : -1);
 
@@ -320,7 +320,7 @@ export function placeLandmarks(ctx) {
       obj.position.set(p.x - right.x * side * dist, opts.y ?? 0, p.z - right.z * side * dist);
       obj.rotation.y = opts.alignTangent ? Math.atan2(t.x, t.z) : Math.atan2(p.x - obj.position.x, p.z - obj.position.z);
       obj.updateMatrixWorld(true);
-      if (!hitsSolid(obj, -2)) break;
+      if (!hitsSolid(obj, -2) && !(roadCheck && roadCheck(obj, 0.5))) break;
       if (du === -0.12) return null; // no clear spot — skip this landmark
     }
     worldRoot.add(obj);
