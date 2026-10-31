@@ -58,6 +58,7 @@ comes down the road.
 - **DONUT BANDIT** — a fast lateral runner carrying a stolen donut on its head (head accessories count as headshots). hp 2; kill it for +400 and a sprinkle burst, or watch the donut flee. Behavior: `src/enemies/Buffalo.js` (`bandit`), model: `src/world/buffaloModel.js`.
 - **SPAWN DIRECTOR** — encounters never land in your face and never stack. Spawn distance is derived from the rail's live speed (`RailSystem.speedAt`) with per-type reaction budgets (chargers spawn ≥28m out), aggressive buffalo telegraph at 21m, a fresh wave is held back while ≥14 buffalo are alive (queued, fires when the road clears or after 5s), and anything the rail has passed despawns off-stage. Every arrival gets a dust puff + low thud so you notice it. Logic: `LevelManager._fireEncounter`.
 - **COLLISION-AWARE WORLD BUILD** — level structures (barns, feed stores, ferris wheels…) place first, then buildings and street props (parked cars, trees, lights, tents, pens…) are rejected if their `Box3` footprint would clip into anything solid; NPCs and shootable props slide toward the road until they clear. Nothing spawns inside a building anymore. Logic: `solidBoxes` registry in `src/world/ProceduralWorld.js` + `LevelManager._clearFromSolids`.
+- **TOLEDO LANDMARKS** — every map references the real Glass City: the Museum of Art peristyle with reflecting pool and "The Olympians", Falls of the Maumee rapids weir, the Zoo lion fountain and Olmsted gate arch, Five Points spiral interchange, Walbridge Hall, Mud Hens ballpark, Dossin Great American mall, Libbey glass works with glowing furnaces, harbor locks, working container cranes and a bobbing lake freighter, a flickering GLASS CITY neon, and distant lit skylines on the horizon. Landmarks respect the collision registry and announce themselves over the radio. Logic: `src/world/landmarks.js`.
 - **MUSIC** — a 4-bar lookahead sequencer per intensity track (menu/explore/encounter/herd/boss/victory/gameover): chord pads walk a progression, bass and lead get distinct per-bar variations with fills, humanized drums (ghost hats, velocity jitter, open hats, tom fills, crash on phrase tops) and an echo bus under the lead. Logic: `TRACKS` + `_playStep` in `src/core/AudioManager.js`.
 
 ## Upgrades (roguelike)
@@ -171,6 +172,7 @@ src/
   player/             Player (hp/damage), Weapon (fire/reload/raycast + upgrade stats)
   enemies/            Buffalo, BossBuffalo, NPC
   world/              ProceduralWorld + procedural textures/geometry/buffalo model
+                      + landmarks.js (stylized real Toledo structures)
   levels/             level1..5.js data modules + index.js registry
 scripts/
   smoke.js            Node logic tests (levels, rails, combos, rng) - no browser

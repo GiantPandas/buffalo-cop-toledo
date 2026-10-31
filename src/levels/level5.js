@@ -40,6 +40,7 @@ export default {
   ],
   events: [
     { time: 2, type: 'announce', text: 'INDUSTRIAL DISTRICT.' },
+    { time: 12, type: 'announce', text: 'OLD GLASS WORKS — LIBBEY FIRES BURN. BUFFALO DO NOT.' },
     { time: 9, type: 'music', track: 'encounter' },
     { time: 24, type: 'announce', text: 'THEY GUARD THE CAR WASH.' },
     { time: 38, type: 'music', track: 'herd' },

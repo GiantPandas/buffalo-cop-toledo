@@ -47,10 +47,13 @@ export default {
   events: [
     { time: 2, type: 'announce', text: 'TOLEDO, POPULATION: ???' },
     { time: 8, type: 'announce', text: 'BUFFALO!' },
+    { time: 12, type: 'announce', text: 'TOLEDO MUSEUM OF ART — COLUMNS, COLUMNS, COLUMNS.' },
+    { time: 15, type: 'announce', text: 'THE MAUMEE RAPIDS RUSH UNDER THE FALLS.' },
     { time: 16, type: 'music', track: 'encounter' },
     { time: 24, type: 'announce', text: 'THAT IS NOT NORMAL.' },
     { time: 26.5, type: 'announce', text: 'SOMEONE STOLE THE STATION DONUTS.' },
     { time: 34, type: 'music', track: 'herd' },
+    { time: 47, type: 'announce', text: 'PORT OF TOLEDO — FREIGHTERS, CRANES, BUFFALO.' },
     { time: 46, type: 'bigtext', text: 'OH COME ON.', freeze: 1.6 },
     { time: 52, type: 'announce', text: 'TOO MANY!' },
     { time: 68, type: 'announce', text: 'BIG ONE! CLEAR THE ROAD.' }

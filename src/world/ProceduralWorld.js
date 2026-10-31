@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { addBox, addCyl, makePrism, buildStrip, disposeTree } from './geometry.js';
+import { placeLandmarks } from './landmarks.js';
 import {
   makeBuildingTexture, makeRoadTexture, makeSidewalkTexture, makeGrassTexture,
   makeDirtTexture, makeConcreteTexture, makeWaterTexture, makeSignTexture,
@@ -553,6 +554,9 @@ export function buildWorld(scene, curve, levelData, rng) {
     rememberSolid(obj);
     if (update) anims.push(update);
   }
+
+  // ---- Toledo landmarks (stylized real Glass City structures) ----
+  placeLandmarks({ theme: w.theme, rng, M, curve, roadWidth, riverSide: w.riverSide || 0, worldRoot, anims, rememberSolid, hitsSolid });
 
   // ---- Buildings along both sides ----
   let bi = 0;

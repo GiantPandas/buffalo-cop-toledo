@@ -50,6 +50,7 @@ export default {
   events: [
     { time: 2, type: 'announce', text: 'MAIN STREET. HERE WE GO.' },
     { time: 10, type: 'music', track: 'encounter' },
+    { time: 20, type: 'announce', text: 'FIVE POINTS: FIVE ROADS INTO ONE MESS.' },
     { time: 28, type: 'announce', text: 'THEY HAVE SECURITY VESTS.' },
     { time: 36, type: 'music', track: 'herd' },
     { time: 45, type: 'bigtext', text: 'YOU HAVE GOT TO\nBE KIDDING.', freeze: 1.8 },

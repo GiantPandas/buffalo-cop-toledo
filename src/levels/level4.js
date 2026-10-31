@@ -46,6 +46,7 @@ export default {
   ],
   events: [
     { time: 2, type: 'announce', text: 'THE COUNTY FAIR.' },
+    { time: 12, type: 'announce', text: 'TOLEDO ZOO GATE — THE BUFFALO ESCAPED THE LION FOUNTAIN.' },
     { time: 8, type: 'music', track: 'encounter' },
     { time: 16, type: 'announce', text: 'THEY WON EVERY PRIZE BOOTH.' },
     { time: 29, type: 'announce', text: 'THAT BUFFALO IS HOLDING YOUR DONUT.' },
