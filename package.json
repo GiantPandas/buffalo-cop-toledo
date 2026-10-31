@@ -1,0 +1,18 @@
+{
+  "name": "buffalo-cop-too-many-goddamn-buffalo-in-toledo",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "BUFFALO COP: TOO MANY GODDAMN BUFFALO IN TOLEDO - an original arcade rail shooter built with Three.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.165.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.8"
+  }
+}

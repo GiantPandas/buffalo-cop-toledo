@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BUFFALO COP: Too Many Goddamn Buffalo in Toledo</title>
+</head>
+<body>
+  <div id="app"></div>
+
+  <!-- CRT overlay -->
+  <div id="crt-overlay">
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+    <div class="flicker"></div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div id="hud-score">
+      <div class="hud-label">SCORE</div>
+      <div id="score-value">000000</div>
+    </div>
+    <div id="combo-wrap" class="hidden">
+      <div id="combo-text">BUFFALO COMBO x2</div>
+    </div>
+    <div id="hud-hp">
+      <div class="hud-label">HP</div>
+      <div id="hp-bar"><div id="hp-fill"></div></div>
+      <div id="hp-value">100</div>
+    </div>
+    <div id="mission-label">MISSION 01</div>
+    <div id="ammo-wrap">
+      <div class="hud-label">AMMO</div>
+      <div id="ammo-dots"></div>
+      <div id="ammo-reload" class="hidden">RELOAD!</div>
+    </div>
+    <div id="boss-hp-wrap" class="hidden">
+      <div id="boss-name">THE BIGGEST BUFFALO IN TOLEDO</div>
+      <div id="boss-bar"><div id="boss-fill"></div></div>
+    </div>
+  </div>
+
+  <!-- Crosshair -->
+  <div id="crosshair" class="hidden">
+    <div class="ch-dot"></div>
+    <div class="ch-bracket ch-t"></div>
+    <div class="ch-bracket ch-b"></div>
+    <div class="ch-bracket ch-l"></div>
+    <div class="ch-bracket ch-r"></div>
+  </div>
+  <div id="hitmarker" class="hidden"></div>
+
+  <!-- Announcer -->
+  <div id="announce" class="hidden"></div>
+  <div id="bigtext" class="hidden"></div>
+  <div id="damage-vignette"></div>
+  <!-- Bullet time ("Last of the Herd") -->
+  <div id="focus-overlay" class="hidden">
+    <div id="focus-label">LAST OF THE HERD &mdash; x2 SCORE</div>
+  </div>
+  <div id="dmg-layer"></div>
+
+  <!-- ============ SCREENS ============ -->
+
+  <div id="screen-menu" class="screen">
+    <div class="menu-cabinet">
+      <div id="title-block">
+        <div class="title-top">TOLEDO POLICE DEPT. PRESENTS</div>
+        <h1 class="title-main">BUFFALO COP</h1>
+        <div class="title-sub">TOO MANY GODDAMN<br/>BUFFALO IN TOLEDO</div>
+      </div>
+      <div id="menu-buttons">
+        <button class="arcade-btn" data-action="start">START GAME</button>
+        <button class="arcade-btn" data-action="levelselect">LEVEL SELECT</button>
+        <button class="arcade-btn" data-action="highscores">HIGH SCORES</button>
+        <button class="arcade-btn" data-action="options">OPTIONS</button>
+      </div>
+      <div id="insert-coin">INSERT COIN</div>
+      <div id="menu-footer">A 1996 ARCADE CLASSIC &bull; TOLEDO, OHIO &bull; POPULATION: MOSTLY BUFFALO</div>
+    </div>
+  </div>
+
+  <div id="screen-briefing" class="screen hidden">
+    <div class="panel">
+      <div id="brief-mission">MISSION 01</div>
+      <h2 id="brief-name">WEST SIDE ARRIVAL</h2>
+      <div id="brief-objective">OBJECTIVE: CLEAR THE ROAD.</div>
+      <div id="brief-flavor"></div>
+      <button class="arcade-btn primary" data-action="begin">PULL THE LEVER</button>
+    </div>
+  </div>
+
+  <div id="screen-levelselect" class="screen hidden">
+    <h2 class="panel-title">SELECT MISSION</h2>
+    <div id="level-grid"></div>
+    <button class="arcade-btn back" data-action="back">&lt; BACK</button>
+  </div>
+
+  <div id="screen-highscores" class="screen hidden">
+    <h2 class="panel-title">BUFFALO HUNTERS &mdash; TOP 10</h2>
+    <div id="hs-table"></div>
+    <button class="arcade-btn back" data-action="back">&lt; BACK</button>
+  </div>
+
+  <div id="screen-options" class="screen hidden">
+    <h2 class="panel-title">OPTIONS</h2>
+    <div class="options-grid">
+      <label>MOUSE SENSITIVITY
+        <input type="range" id="opt-sensitivity" min="0.4" max="1.6" step="0.05" />
+      </label>
+      <label>MASTER VOLUME
+        <input type="range" id="opt-master" min="0" max="1" step="0.05" />
+      </label>
+      <label>MUSIC VOLUME
+        <input type="range" id="opt-music" min="0" max="1" step="0.05" />
+      </label>
+      <label>EFFECTS VOLUME
+        <input type="range" id="opt-sfx" min="0" max="1" step="0.05" />
+      </label>
+      <label>SCREEN SHAKE
+        <select id="opt-shake">
+          <option value="on">ON</option>
+          <option value="off">OFF</option>
+        </select>
+      </label>
+      <label>CRT EFFECTS
+        <select id="opt-crt">
+          <option value="on">ON</option>
+          <option value="off">OFF</option>
+        </select>
+      </label>
+      <label>CROSSHAIR SIZE
+        <input type="range" id="opt-crosshair" min="0.6" max="2" step="0.1" />
+      </label>
+      <label>DIFFICULTY
+        <select id="opt-difficulty">
+          <option value="easy">EASY</option>
+          <option value="normal">NORMAL</option>
+          <option value="hard">HARD</option>
+        </select>
+      </label>
+    </div>
+    <button class="arcade-btn back" data-action="back">&lt; BACK</button>
+  </div>
+
+  <div id="screen-pause" class="screen hidden">
+    <h2 class="panel-title">PAUSED</h2>
+    <div id="menu-buttons">
+      <button class="arcade-btn primary" data-action="resume">RESUME</button>
+      <button class="arcade-btn" data-action="restart">RESTART MISSION</button>
+      <button class="arcade-btn" data-action="pause-options">OPTIONS</button>
+      <button class="arcade-btn" data-action="quit">QUIT TO MENU</button>
+    </div>
+  </div>
+
+  <div id="screen-results" class="screen hidden">
+    <div class="panel">
+      <h2 id="results-title">MISSION COMPLETE</h2>
+      <div class="results-rows">
+        <div class="rrow"><span>BUFFALO DEFEATED</span><span id="res-kills">0</span></div>
+        <div class="rrow"><span>ACCURACY</span><span id="res-accuracy">0%</span></div>
+        <div class="rrow"><span>BEST COMBO</span><span id="res-combo">x1</span></div>
+        <div class="rrow"><span>DAMAGE TAKEN</span><span id="res-damage">0</span></div>
+        <div class="rrow"><span>BONUS</span><span id="res-bonus">0</span></div>
+      </div>
+      <div class="results-total">TOTAL SCORE<br/><span id="res-total">0</span></div>
+      <button class="arcade-btn primary" data-action="next">CONTINUE</button>
+    </div>
+  </div>
+
+  <div id="screen-upgrades" class="screen hidden">
+    <div class="panel">
+      <h2 class="panel-title" id="upg-title">CHOOSE AN UPGRADE</h2>
+      <div class="upg-sub">PICK ONE &mdash; IT STAYS FOR THE REST OF THE RUN</div>
+      <div id="upgrade-grid"></div>
+    </div>
+  </div>
+
+  <div id="screen-gameover" class="screen hidden">
+    <div class="panel">
+      <h2 class="go-title">TOO MANY BUFFALO</h2>
+      <div class="go-sub">GAME OVER</div>
+      <div class="results-rows">
+        <div class="rrow"><span>FINAL SCORE</span><span id="go-score">0</span></div>
+      </div>
+      <div id="go-name-wrap" class="hidden">
+        <div class="name-prompt">ENTER YOUR NAME, OFFICER</div>
+        <input type="text" id="go-name-input" maxlength="3" />
+        <button class="arcade-btn primary" data-action="confirm-name-go">CONFIRM</button>
+      </div>
+      <button class="arcade-btn" data-action="retry">RETRY MISSION</button>
+      <button class="arcade-btn back" data-action="quit2">&lt; QUIT TO MENU</button>
+    </div>
+  </div>
+
+  <div id="screen-victory" class="screen hidden">
+    <div class="panel">
+      <h2 class="vic-title">TOLEDO IS SAVED</h2>
+      <div class="vic-sub">...FOR NOW. CHECK THE RIVERBANK.</div>
+      <div class="results-rows">
+        <div class="rrow"><span>FINAL SCORE</span><span id="vic-score">0</span></div>
+      </div>
+      <div id="vic-name-wrap" class="hidden">
+        <div class="name-prompt">ENTER YOUR NAME, OFFICER</div>
+        <input type="text" id="vic-name-input" maxlength="3" />
+        <button class="arcade-btn primary" data-action="confirm-name-vic">CONFIRM</button>
+      </div>
+      <button class="arcade-btn" data-action="play-again">PLAY AGAIN</button>
+      <button class="arcade-btn back" data-action="quit3">&lt; QUIT TO MENU</button>
+    </div>
+  </div>
+
+  <noscript>This game requires JavaScript and WebGL.</noscript>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
