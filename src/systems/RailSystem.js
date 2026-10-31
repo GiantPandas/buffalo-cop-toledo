@@ -10,6 +10,7 @@ export class RailSystem {
     this.lookCurve = new THREE.CatmullRomCurve3(
       lookAts.map((p) => new THREE.Vector3(p[0], p[1], p[2])), false, 'centripetal');
     this.duration = Math.max(5, duration);
+    this._len = this.posCurve.getLength();
     this.time = 0;
     this.finished = false;
     this._pos = new THREE.Vector3();
@@ -20,6 +21,13 @@ export class RailSystem {
 
   // Eased progress — where the camera actually is on the curve.
   easedProgress() { return this._ease(this.progress); }
+
+  // Rail speed in m/s at linear progress x (matches the _ease derivative).
+  // Used by the spawn director to guarantee reaction time.
+  speedAt(x) {
+    const c = clamp(x, 0, 1);
+    return (this._len / this.duration) * (0.7 + 1.8 * c * (1 - c));
+  }
 
   update(dt) {
     if (this.finished) return;

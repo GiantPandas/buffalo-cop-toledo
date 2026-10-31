@@ -36,13 +36,13 @@ export default {
     { time: 19, type: 'traffic', count: 3, ahead: 16 },
     { time: 27, type: 'fair', count: 5, ahead: 24 },
     { time: 31, type: 'bandit', count: 3, ahead: 16 }, // prize-donut raid
-    { time: 35, type: 'panicked', count: 5, ahead: 14 },
+    { time: 35, type: 'panicked', count: 3, ahead: 14 },
     // The whole herd arrives at the fair.
-    { time: 44, type: 'herd', count: 14, ahead: 30 },
+    { time: 44, type: 'herd', count: 9, ahead: 30 },
     { time: 52, type: 'angry', count: 3, ahead: 24 },
-    { time: 60, type: 'fair', count: 6, ahead: 24 },
-    { time: 68, type: 'security', count: 3, ahead: 26 },
-    { time: 76, type: 'herd', count: 12, ahead: 28 }
+    { time: 60, type: 'fair', count: 4, ahead: 24 },
+    { time: 68, type: 'security', count: 2, ahead: 26 },
+    { time: 76, type: 'herd', count: 8, ahead: 28 }
   ],
   events: [
     { time: 2, type: 'announce', text: 'THE COUNTY FAIR.' },

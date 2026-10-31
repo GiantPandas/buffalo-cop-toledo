@@ -323,6 +323,14 @@ export class AudioManager {
     this._noise(t, 0.5, 0.12, 'bandpass', 600, 1.5);
   }
 
+  // Soft low thud when a buffalo arrives on the road.
+  spawnPop() {
+    if (!this._ready()) return;
+    const t = this.ctx.currentTime;
+    this._osc('sine', 150, t, 0.13, 0.11, null, 70);
+    this._noise(t, 0.08, 0.05, 'lowpass', 420);
+  }
+
   playerHurt() {
     if (!this._ready()) return;
     const t = this.ctx.currentTime;

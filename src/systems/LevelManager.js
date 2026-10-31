@@ -175,6 +175,7 @@ export class LevelManager {
     this.bossEnding = false;
     this.boss = null;
     this.endTimer = 0;
+    this.pendingEnc = [];    // spawn director: encounters held back while the board is crowded
     this.rng = new Rng(1234);
   }
 
@@ -188,6 +189,7 @@ export class LevelManager {
     this.obstacles = [];
     this.boss = null;
     this.bossActive = false;
+    this.pendingEnc = [];
 
     const data = game.levelDataFor(levelIndex);
     this.levelData = data;
@@ -334,6 +336,19 @@ export class LevelManager {
     // Advance the rail.
     this.rail.update(dt);
 
+    // Spawn director: hold encounters back while the board is already crowded,
+    // fire them once it clears (or after 5s regardless).
+    if (this.pendingEnc.length) {
+      const alive = game._aliveHerdCount();
+      for (let i = this.pendingEnc.length - 1; i >= 0; i--) {
+        const pe = this.pendingEnc[i];
+        if (alive < 12 || game.time >= pe.deadline) {
+          this.pendingEnc.splice(i, 1);
+          this._fireEncounter(pe.enc, true);
+        }
+      }
+    }
+
     // Fire due events/encounters.
     while (this.eventIndex < this.events.length && this.events[this.eventIndex].time <= this.time) {
       const item = this.events[this.eventIndex++];
@@ -376,11 +391,24 @@ export class LevelManager {
     }
   }
 
-  _fireEncounter(enc) {
+  _fireEncounter(enc, forced = false) {
     const game = this.game;
+
+    // Spawn director: don't stack a fresh wave onto an already-full road.
+    if (!forced && enc.type !== 'feedstore_burst' && game._aliveHerdCount() >= 14) {
+      this.pendingEnc.push({ enc, deadline: game.time + 5 });
+      return;
+    }
+
     const scale = game.difficulty.spawnScale;
     const count = Math.max(1, Math.round((enc.count || 1) * scale));
     const roadW = this.levelData.world.roadWidth || 10;
+    // Reaction-time guarantee: charging types spawn farther out, and everyone
+    // scales with the rail's current speed (the ride eases in/out, so a fixed
+    // "ahead" would land much closer at the slow start of a level).
+    const REACTION_AHEAD = { angry: 28, security: 28, giant: 30, herd: 24, traffic: 18, bandit: 22, panicked: 18 };
+    const speed = this.rail.speedAt(this.rail.progress);
+    const ahead = Math.max(enc.ahead || 20, REACTION_AHEAD[enc.type] || 18, speed * 4 + 10);
 
     if (enc.type === 'feedstore_burst') {
       // Doors of the feed store blow open; buffalo pour onto the street ahead.
@@ -392,14 +420,14 @@ export class LevelManager {
         size: [0.5, 1.2], speed: [3, 8], life: [0.5, 1], gravity: 4
       });
       // They pour out onto the street just ahead of the player (always on-road).
+      // Never closer than 12m — a burst in your face is not a fair ambush.
       for (let i = 0; i < count; i++) {
-        const pos = this.roadSpawnPos(3 + Math.random() * 9, (Math.random() - 0.5) * (roadW - 4));
+        const pos = this.roadSpawnPos(12 + Math.random() * 10, (Math.random() - 0.5) * (roadW - 4));
         game.enemyManager.spawnBuffalo(i % 3 === 0 ? 'angry' : 'normal', pos);
       }
       return;
     }
 
-    const ahead = enc.ahead || 20;
     for (let i = 0; i < count; i++) {
       let lateral;
       if (enc.type === 'herd') {
@@ -411,7 +439,7 @@ export class LevelManager {
       } else {
         lateral = (Math.random() < 0.5 ? -1 : 1) * (2 + Math.random() * (roadW / 2 - 3));
       }
-      const pos = this.roadSpawnPos(ahead + (Math.random() - 0.5) * 6, lateral);
+      const pos = this.roadSpawnPos(ahead + (Math.random() - 0.5) * 4, lateral);
       game.enemyManager.spawnBuffalo(enc.type, pos);
     }
   }

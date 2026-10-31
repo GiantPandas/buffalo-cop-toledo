@@ -4,6 +4,9 @@ import { buildBuffalo } from '../world/buffaloModel.js';
 import { Rng } from '../utils/rng.js';
 import { clamp, damp } from '../utils/mathx.js';
 
+const _fwd = new THREE.Vector3();
+const _behind = new THREE.Vector3();
+
 // Arcade buffalo: procedural model + state machine AI.
 export class Buffalo {
   constructor(variant, position, game) {
@@ -76,6 +79,14 @@ export class Buffalo {
     }
 
     game.scene.add(this.group);
+
+    // Dust puff + soft thud on arrival so the player registers new spawns.
+    if (game.state === 'playing' && game.particles) {
+      game.particles.spawnBurst(this.group.position.clone().setY(0.3), {
+        count: 7, colors: [0xc9b28a, 0xa08b68], speed: [1, 2.6], life: [0.25, 0.55], size: [0.3, 0.7], gravity: 1.5
+      });
+      if (game.audio.spawnPop) game.audio.spawnPop();
+    }
   }
 
   get alive() { return !this.dead; }
@@ -154,6 +165,20 @@ export class Buffalo {
     const dist = this.distanceToCamera();
     this.stateTimer += dt;
 
+    // The rail has passed it: anything loitering behind the player is off-stage.
+    if (dist > 28) {
+      this.game.camera.getWorldDirection(_fwd);
+      _behind.subVectors(this.group.position, camPos);
+      if (_behind.dot(_fwd) < -6) {
+        if (this.variant === 'bandit' && !this._escapeLogged) {
+          this._escapeLogged = true;
+          this.game.onBanditEscaped(this);
+        }
+        this._gone = true;
+        return;
+      }
+    }
+
     switch (this.state) {
       case 'idle': this._updateIdle(dt, time, camPos, dist); break;
       case 'walk': this._updateWalk(dt, time, camPos, dist); break;
@@ -183,7 +208,7 @@ export class Buffalo {
     if (dist < 16) this._faceToward(camPos, dt, 2.5);
 
     // Aggressive variants: start a charge when in range and off cooldown.
-    if ((this.variant === 'angry' || this.variant === 'security') && dist < 17) {
+    if ((this.variant === 'angry' || this.variant === 'security') && dist < 21) {
       this.attackCooldown -= dt;
       if (this.attackCooldown <= 0) {
         this.state = 'telegraph';

@@ -34,9 +34,9 @@ export default {
     { time: 12, type: 'security', count: 3, ahead: 26 },
     { time: 20, type: 'angry', count: 3, ahead: 24 },
     { time: 28, type: 'traffic', count: 3, ahead: 16 },
-    { time: 36, type: 'security', count: 4, ahead: 26 },
-    { time: 44, type: 'angry', count: 4, ahead: 24 },
-    { time: 52, type: 'herd', count: 8, ahead: 26 }
+    { time: 36, type: 'security', count: 3, ahead: 26 },
+    { time: 44, type: 'angry', count: 3, ahead: 24 },
+    { time: 52, type: 'herd', count: 6, ahead: 26 }
   ],
   events: [
     { time: 2, type: 'announce', text: 'INDUSTRIAL DISTRICT.' },

@@ -73,7 +73,7 @@ export class Game {
     this.scene.add(sun);
 
     // Camera (in scene so the gun view model renders).
-    this.camera = new THREE.PerspectiveCamera(62, container.clientWidth / container.clientHeight, 0.1, 500);
+    this.camera = new THREE.PerspectiveCamera(70, container.clientWidth / container.clientHeight, 0.1, 500);
     this.camera.position.set(0, 2.2, -170);
     this.scene.add(this.camera);
     this.cameraCtrl = new CameraController(this.camera);

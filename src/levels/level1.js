@@ -38,10 +38,10 @@ export default {
     { time: 26, type: 'bandit', count: 2, ahead: 18 }, // donut thieves, cross the road fast
     { time: 30, type: 'angry', count: 2, ahead: 24 },
     { time: 38, type: 'normal', count: 4, ahead: 22 },
-    { time: 41, type: 'panicked', count: 2, ahead: 14 },
-    { time: 50, type: 'herd', count: 8, ahead: 26 },
+    { time: 44, type: 'panicked', count: 2, ahead: 14 },
+    { time: 50, type: 'herd', count: 7, ahead: 26 },
     { time: 58, type: 'angry', count: 3, ahead: 24 },
-    { time: 66, type: 'normal', count: 4, ahead: 20 },
+    { time: 66, type: 'normal', count: 3, ahead: 20 },
     { time: 70, type: 'giant', count: 1, ahead: 22 }
   ],
   events: [

@@ -38,14 +38,14 @@ export default {
     { time: 5, type: 'normal', count: 3, ahead: 20 },
     { time: 12, type: 'traffic', count: 3, ahead: 16 },
     { time: 19, type: 'angry', count: 2, ahead: 24 },
-    { time: 26, type: 'normal', count: 5, ahead: 24 },
+    { time: 26, type: 'normal', count: 4, ahead: 24 },
     { time: 33, type: 'security', count: 2, ahead: 26 },
     { time: 40, type: 'panicked', count: 4, ahead: 14 },
-    { time: 47, type: 'herd', count: 10, ahead: 28 },
+    { time: 47, type: 'herd', count: 8, ahead: 28 },
     { time: 55, type: 'angry', count: 3, ahead: 24 },
-    { time: 62, type: 'security', count: 3, ahead: 26 },
-    { time: 70, type: 'herd', count: 12, ahead: 30 },
-    { time: 78, type: 'angry', count: 4, ahead: 24 }
+    { time: 62, type: 'security', count: 2, ahead: 26 },
+    { time: 70, type: 'herd', count: 9, ahead: 30 },
+    { time: 78, type: 'angry', count: 3, ahead: 24 }
   ],
   events: [
     { time: 2, type: 'announce', text: 'MAIN STREET. HERE WE GO.' },

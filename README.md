@@ -56,6 +56,7 @@ comes down the road.
 - **LAST OF THE HERD (bullet time)** — when exactly one buffalo is left on the road, the world drops to ~1/3 speed (blue-tinted vignette, falling whoosh) while your trigger stays at full speed and score doubles. Lasts 3.5 real seconds, has a 10s cooldown, and never fires during boss fights or set-piece freezes. Logic: `Game._updateFocus` in `src/core/Game.js`.
 - **BARREL CHAINS** — a shot barrel blasts every buffalo within 6.5m (flat points, no combo inflation) and detonates barrels within 8m, chaining up to 3 deep. The boss takes 1 damage per blast. Logic: `Game.barrelBlast` + the `barrel` case in `src/systems/LevelManager.js`.
 - **DONUT BANDIT** — a fast lateral runner carrying a stolen donut on its head (head accessories count as headshots). hp 2; kill it for +400 and a sprinkle burst, or watch the donut flee. Behavior: `src/enemies/Buffalo.js` (`bandit`), model: `src/world/buffaloModel.js`.
+- **SPAWN DIRECTOR** — encounters never land in your face and never stack. Spawn distance is derived from the rail's live speed (`RailSystem.speedAt`) with per-type reaction budgets (chargers spawn ≥28m out), aggressive buffalo telegraph at 21m, a fresh wave is held back while ≥14 buffalo are alive (queued, fires when the road clears or after 5s), and anything the rail has passed despawns off-stage. Every arrival gets a dust puff + low thud so you notice it. Logic: `LevelManager._fireEncounter`.
 
 ## Upgrades (roguelike)
 
@@ -113,7 +114,9 @@ registered in `src/levels/index.js`. Copy an existing file and change:
 - `encounters[]`: `{ time, type, count, ahead }`. Buffalo types (see
   `CONFIG.buffalos` in `src/config.js`): `normal`, `angry`, `panicked`, `bandit`,
   `traffic`, `fair`, `security`, `giant`, plus `herd` (large group) and the
-  special `feedstore_burst`. `ahead` is spawn distance down the road.
+  special `feedstore_burst`. `ahead` is spawn distance down the road — it acts as a
+  **minimum**: the spawn director widens it by rail speed and type, and queues waves
+  that would exceed ~14 live buffalo.
 - `events[]`: `{ time, type: 'announce' | 'bigtext' | 'music', text/track/freeze }`.
   `bigtext` freezes the world for `freeze` seconds (set pieces).
 - `npcs[]`: `{ kind, u, side, dist }` — kinds: `cop`, `shopper`, `pedestrian`,

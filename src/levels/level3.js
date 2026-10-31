@@ -35,15 +35,15 @@ export default {
   encounters: [
     { time: 5, type: 'normal', count: 3, ahead: 20 },
     { time: 12, type: 'traffic', count: 2, ahead: 16 },
-    { time: 19, type: 'angry', count: 3, ahead: 24 },
-    { time: 27, type: 'normal', count: 5, ahead: 24 },
+    { time: 19, type: 'angry', count: 2, ahead: 24 },
+    { time: 27, type: 'normal', count: 4, ahead: 24 },
     { time: 35, type: 'security', count: 2, ahead: 26 },
-    { time: 43, type: 'panicked', count: 4, ahead: 14 },
+    { time: 43, type: 'panicked', count: 3, ahead: 14 },
     // The feed store doors blow open.
     { time: 50, type: 'feedstore_burst', count: 8, u: 0.52 },
-    { time: 58, type: 'angry', count: 4, ahead: 24 },
-    { time: 66, type: 'security', count: 3, ahead: 26 },
-    { time: 74, type: 'herd', count: 10, ahead: 28 }
+    { time: 58, type: 'angry', count: 3, ahead: 24 },
+    { time: 66, type: 'security', count: 2, ahead: 26 },
+    { time: 74, type: 'herd', count: 8, ahead: 28 }
   ],
   events: [
     { time: 2, type: 'announce', text: 'AGRICULTURAL DISTRICT.' },
