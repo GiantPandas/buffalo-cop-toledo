@@ -6,6 +6,8 @@ disasters across 5 levels, ending in a multi-phase boss fight against
 THE BIGGEST BUFFALO IN TOLEDO. All art is procedural (geometry + canvas textures),
 all audio is synthesized with Web Audio. No external assets.
 
+**▶ Play the live demo: https://giantpandas.github.io/buffalo-cop-toledo/**
+
 ## Run it
 
 Requirements: Node 18+ and a modern desktop browser with WebGL.
