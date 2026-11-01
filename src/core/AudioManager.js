@@ -223,9 +223,10 @@ export class AudioManager {
   shoot() {
     if (!this._ready()) return;
     const t = this.ctx.currentTime;
-    this._noise(t, 0.14, 0.5, 'lowpass', 2600);
-    this._osc('square', 190, t, 0.1, 0.35, null, 55);
-    this._osc('sine', 90, t, 0.16, 0.5, null, 38);
+    const j = 0.85 + Math.random() * 0.3; // pitch jitter so full-auto isn't a drone
+    this._noise(t, 0.09, 0.42, 'lowpass', 2400 * j);
+    this._osc('square', 170 * j, t, 0.07, 0.3, null, 52);
+    this._osc('sine', 82 * j, t, 0.11, 0.42, null, 36);
   }
 
   dryFire() {

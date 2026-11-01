@@ -8,7 +8,7 @@ export default {
     'DISPATCH: "We found the source of the buffalo."',
     'YOU: "Where?"',
     'DISPATCH: "The old car wash. It is... a lot. Bring a big gun."',
-    'NOTE: The gun has six rounds. You will need all of them.'
+    'ARMORY: "Issued: one UZ-TOLEDO, drum feed, thirty rounds. Hold the trigger and pray."'
   ],
   duration: 64,
   lookAhead: 26,

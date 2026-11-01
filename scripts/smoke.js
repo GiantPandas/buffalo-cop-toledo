@@ -110,15 +110,21 @@ check(comboMultiplier(30) === 5 && comboMultiplier(999) === 5, 'mult: 30+ = x5')
 }
 
 // ---------- Weapon config sanity ----------
-check(CONFIG.weapon.magSize === 6, 'weapon: 6-round mag');
-check(!!CONFIG.boss.hp && CONFIG.boss.hp > 10, `boss hp ${CONFIG.boss.hp}`);
+check(CONFIG.weapon.magSize >= 20, `weapon: drum mag (${CONFIG.weapon.magSize} rounds)`);
+check(CONFIG.weapon.fireCooldown <= 0.12, `weapon: full-auto rate (${CONFIG.weapon.fireCooldown}s cooldown)`);
+check(CONFIG.boss.hp > 10 && CONFIG.boss.hp / CONFIG.weapon.damage <= 60, `boss hp ${CONFIG.boss.hp} killable at uzi DPS`);
 check(!!CONFIG.buffalos.bandit, 'config: donut bandit variant exists');
 
 // ---------- Roguelike upgrades ----------
 {
   const base = () => ({
     player: {
-      weapon: { magSize: 6, fireCooldown: 0.16, reloadTime: 1.25, recoil: 0.045, damage: 1, ammo: 6, critChance: 0, pierce: 0, headshotBonus: 0 },
+      weapon: {
+        magSize: CONFIG.weapon.magSize, fireCooldown: CONFIG.weapon.fireCooldown,
+        reloadTime: CONFIG.weapon.reloadTime, recoil: CONFIG.weapon.recoil,
+        damage: CONFIG.weapon.damage, ammo: CONFIG.weapon.magSize,
+        critChance: 0, pierce: 0, headshotBonus: 0, spreadScale: 1
+      },
       maxHp: 100, hp: 100, damageReduction: 0, flatDamageReduction: 0
     },
     score: { bonusMul: 1 }
@@ -129,14 +135,16 @@ check(!!CONFIG.buffalos.bandit, 'config: donut bandit variant exists');
   for (const u of UPGRADES) {
     const g = base(); u.apply(g);
     const w = g.player.weapon;
-    check(Number.isFinite(w.damage + w.magSize + w.fireCooldown), `upgrade ${u.id} leaves finite stats`);
+    check(Number.isFinite(w.damage + w.magSize + w.fireCooldown + w.spreadScale), `upgrade ${u.id} leaves finite stats`);
   }
   let g = base(); UPGRADES.find((u) => u.id === 'magsize').apply(g);
-  check(g.player.weapon.magSize === 8 && g.player.weapon.ammo === 8, 'magsize: +2 and tops off mag');
+  check(g.player.weapon.magSize === CONFIG.weapon.magSize + 10 && g.player.weapon.ammo === CONFIG.weapon.magSize + 10, 'drum mag: +10 and tops off mag');
   g = base(); UPGRADES.find((u) => u.id === 'damage').apply(g);
   check(g.player.weapon.damage === 2, 'damage: +1 per shot');
   g = base(); UPGRADES.find((u) => u.id === 'rof').apply(g);
-  check(g.player.weapon.fireCooldown < 0.16, `rof: faster (${g.player.weapon.fireCooldown.toFixed(3)})`);
+  check(g.player.weapon.fireCooldown < CONFIG.weapon.fireCooldown, `rof: faster (${g.player.weapon.fireCooldown.toFixed(3)})`);
+  g = base(); UPGRADES.find((u) => u.id === 'bloom').apply(g);
+  check(g.player.weapon.spreadScale < 1, `bloom: spread reduced (${g.player.weapon.spreadScale.toFixed(2)})`);
 }
 
 console.log(failures === 0 ? '\nALL SMOKE TESTS PASSED' : `\n${failures} FAILURES`);

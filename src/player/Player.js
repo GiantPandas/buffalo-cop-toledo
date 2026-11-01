@@ -18,7 +18,7 @@ export class Player {
     const g = this.game;
     if (!this.alive) return;
 
-    // Fire on hold (arcade rapid fire) — edge also works.
+    // Fire on hold — the UZ-TOLEDO is full-auto; bloom converges when you let off.
     if ((g.input.firing || g.input.firePressed) && this.weapon.canFire) {
       this.weapon.fire();
     }

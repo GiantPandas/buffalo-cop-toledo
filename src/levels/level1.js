@@ -67,9 +67,11 @@ export default {
   shootables: [
     { type: 'sign', u: 0.24, side: 1, dist: 6, text: 'BUFFALO\nCROSSING', sub: 'EXPECT DELAYS' },
     { type: 'trafficlight', u: 0.48, side: -1, dist: 6 },
-    // Barrel cluster: shoot one and the chain reaction does the rest.
-    { type: 'barrel', u: 0.66, side: 1, dist: 5 },
-    { type: 'barrel', u: 0.68, side: 1, dist: 6 },
-    { type: 'barrel', u: 0.70, side: 1, dist: 4 }
+    // Barrel cluster: sits in the charge lane of the big herd (t≈50).
+    // The panicked runners flee past well before the player arrives; shoot one
+    // barrel while the herd charges through and the chain reaction wipes it.
+    { type: 'barrel', u: 0.62, side: 1, dist: 5 },
+    { type: 'barrel', u: 0.64, side: 1, dist: 6 },
+    { type: 'barrel', u: 0.66, side: 1, dist: 4 }
   ]
 };

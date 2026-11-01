@@ -80,12 +80,18 @@ html, body {
 }
 
 #ammo-wrap { position: absolute; bottom: 20px; right: 22px; text-align: right; }
-#ammo-dots { display: flex; gap: 6px; justify-content: flex-end; margin-top: 5px; }
-.ammo-dot {
-  width: 14px; height: 14px; border-radius: 50%;
-  background: #ffd23e; box-shadow: 0 0 8px rgba(255,210,62,0.9);
+#ammo-count { color: #ffd23e; text-shadow: 0 0 8px rgba(255,210,62,0.7); }
+#ammo-bar {
+  width: 190px; height: 12px; margin-top: 5px;
+  border: 2px solid #ffd23e; background: rgba(40,30,5,0.65);
+  box-shadow: 0 0 8px rgba(255,210,62,0.45);
 }
-.ammo-dot.empty { background: transparent; border: 2px solid #7a5c14; box-shadow: none; }
+#ammo-fill {
+  height: 100%; width: 100%;
+  background: linear-gradient(90deg, #ffb03e, #ffd23e);
+  transition: width 0.08s linear;
+}
+#ammo-fill.low { background: linear-gradient(90deg, #ff5232, #ffa13b); }
 #ammo-reload {
   font-size: 22px; font-weight: bold; letter-spacing: 3px; color: #ff5252;
   text-shadow: 0 0 10px rgba(255,60,60,0.9);
@@ -99,7 +105,7 @@ html, body {
 #boss-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #ff3e3e, #ffb03e); transition: width 0.2s; }
 
 /* ---------- CROSSHAIR ---------- */
-#crosshair { position: fixed; z-index: 25; pointer-events: none; width: 46px; height: 46px; margin: -23px 0 0 -23px; }
+#crosshair { position: fixed; z-index: 25; pointer-events: none; width: 46px; height: 46px; margin: -23px 0 0 -23px; transition: transform 0.07s linear; }
 .ch-dot {
   position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px;
   border-radius: 50%; background: #fff; box-shadow: 0 0 6px #4dc3ff;

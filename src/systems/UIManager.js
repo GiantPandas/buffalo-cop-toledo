@@ -1,4 +1,5 @@
 import { pad, fmt } from '../utils/mathx.js';
+import { CONFIG } from '../config.js';
 
 // All DOM-based UI: menus, HUD, announcer, results, high scores, options.
 export class UIManager {
@@ -23,7 +24,8 @@ export class UIManager {
     this.el.hpFill = document.getElementById('hp-fill');
     this.el.hpValue = document.getElementById('hp-value');
     this.el.mission = document.getElementById('mission-label');
-    this.el.ammoDots = document.getElementById('ammo-dots');
+    this.el.ammoCount = document.getElementById('ammo-count');
+    this.el.ammoFill = document.getElementById('ammo-fill');
     this.el.ammoReload = document.getElementById('ammo-reload');
     this.el.bossWrap = document.getElementById('boss-hp-wrap');
     this.el.bossName = document.getElementById('boss-name');
@@ -37,8 +39,8 @@ export class UIManager {
     this.el.focusOverlay = document.getElementById('focus-overlay');
     this.el.crt = document.getElementById('crt-overlay');
 
-    // Build ammo dots to match the current mag size.
-    this.rebuildAmmoDots(this.game.player ? this.game.player.weapon.magSize : 6);
+    // Mag display sizing for the current weapon.
+    this.setMagSize(this.game.player ? this.game.player.weapon.magSize : CONFIG.weapon.magSize);
 
     this._bindOptions();
     this._applyOptionsDom();
@@ -99,9 +101,11 @@ export class UIManager {
   }
 
   updateAmmo(ammo, reloading) {
-    const dots = this.el.ammoDots.children;
-    for (let i = 0; i < dots.length; i++) {
-      dots[i].classList.toggle('empty', i >= ammo);
+    if (ammo !== this._lastAmmo) {
+      this._lastAmmo = ammo;
+      this.el.ammoCount.textContent = `${ammo}/${this._magSize}`;
+      this.el.ammoFill.style.width = `${(ammo / this._magSize) * 100}%`;
+      this.el.ammoFill.classList.toggle('low', ammo <= Math.ceil(this._magSize * 0.15));
     }
     this.el.ammoReload.classList.toggle('hidden', !(reloading || ammo === 0));
     this.el.ammoReload.textContent = reloading ? 'RELOADING...' : 'RELOAD!';
@@ -122,10 +126,12 @@ export class UIManager {
   }
 
   // ---------- Crosshair / hit feedback ----------
-  updateCrosshair(x, y, targeting) {
+  // bloom: 0..1 full-auto spread bloom — the brackets open as the trigger is held.
+  updateCrosshair(x, y, targeting, bloom = 0) {
     const ch = this.el.crosshair;
     ch.style.left = `${x}px`;
     ch.style.top = `${y}px`;
+    ch.style.transform = `scale(${1 + Math.min(1, bloom) * 0.8})`;
     ch.classList.toggle('targeting', !!targeting);
   }
 
@@ -231,14 +237,11 @@ export class UIManager {
   }
 
   // ---------- Upgrade pick (roguelike) ----------
-  rebuildAmmoDots(count) {
-    const wrap = this.el.ammoDots;
-    wrap.innerHTML = '';
-    for (let i = 0; i < count; i++) {
-      const d = document.createElement('span');
-      d.className = 'ammo-dot';
-      wrap.appendChild(d);
-    }
+  setMagSize(count) {
+    this._magSize = count;
+    this._lastAmmo = -1; // force a HUD refresh next frame
+    this.el.ammoCount.textContent = `${count}/${count}`;
+    this.el.ammoFill.style.width = '100%';
   }
 
   showUpgrades(options, title) {

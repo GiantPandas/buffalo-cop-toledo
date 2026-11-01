@@ -338,7 +338,7 @@ export class Game {
     this.player.resetRun();
     this.upgradePool = [...UPGRADE_IDS];
     this._lastUpgrade = null;
-    this.ui.rebuildAmmoDots(this.player.weapon.magSize);
+    this.ui.setMagSize(this.player.weapon.magSize);
   }
 
   _rollUpgrades() {
@@ -357,7 +357,7 @@ export class Game {
     def.apply(this);
     this._lastUpgrade = id;
     this.upgradePool.splice(this.upgradePool.indexOf(id), 1);
-    if (id === 'magsize') this.ui.rebuildAmmoDots(this.player.weapon.magSize);
+    if (id === 'magsize') this.ui.setMagSize(this.player.weapon.magSize);
     this.audio.uiSelect();
     if (this._pickIsLoadout) {
       // Loadout picked: roll to the briefing for mission one.
@@ -650,7 +650,8 @@ export class Game {
       // Only valid targets (buffalo/npc/shootable), not the world.
       targeting = true;
     }
-    this.ui.updateCrosshair(this.input.mouse.x, this.input.mouse.y, targeting);
+    const w = this.player.weapon;
+    this.ui.updateCrosshair(this.input.mouse.x, this.input.mouse.y, targeting, w ? w.aimBloom : 0);
   }
 
   // Pause via ESC/P (edge from input).

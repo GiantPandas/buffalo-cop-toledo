@@ -1,11 +1,16 @@
 // Global game configuration
 export const CONFIG = {
   weapon: {
-    magSize: 6,
-    fireCooldown: 0.16,
-    reloadTime: 1.25,
-    recoil: 0.045,
-    damage: 1
+    // "UZ-TOLEDO" — full-auto Toledo PD machine pistol.
+    magSize: 30,          // drum magazine
+    fireCooldown: 0.085,  // ~11.7 rounds/sec on hold
+    reloadTime: 1.9,
+    recoil: 0.014,        // per-shot camera kick (safe for full-auto)
+    damage: 1,
+    // Convergence: holding the trigger blooms the aim; releasing relaxes it.
+    spreadMax: 0.055,     // NDC aim offset at full bloom (~2-3 degrees)
+    bloomPerShot: 0.06,   // bloom gained per shot
+    bloomDecay: 2.4       // bloom lost per second when not firing
   },
   scoring: {
     hit: 100,

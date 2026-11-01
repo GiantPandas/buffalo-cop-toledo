@@ -3,7 +3,8 @@
 export const UPGRADES = [
   { id: 'rof', name: 'OVERCLOCKED TRIGGER', desc: '+25% FIRE RATE', apply(g) { g.player.weapon.fireCooldown *= 0.8; } },
   { id: 'damage', name: 'HEAVY CALIBER', desc: '+1 DAMAGE PER SHOT', apply(g) { g.player.weapon.damage += 1; } },
-  { id: 'magsize', name: 'EXTENDED MAG', desc: '+2 MAG SIZE', apply(g) { const w = g.player.weapon; w.magSize += 2; w.ammo = w.magSize; } },
+  { id: 'magsize', name: 'DRUM MAG', desc: '+10 ROUNDS', apply(g) { const w = g.player.weapon; w.magSize += 10; w.ammo = w.magSize; } },
+  { id: 'bloom', name: 'TRIGGER CONTROL', desc: 'FULL-AUTO SPREAD -35%', apply(g) { g.player.weapon.spreadScale *= 0.65; } },
   { id: 'reload', name: 'QUICK SWAP', desc: '-20% RELOAD TIME', apply(g) { g.player.weapon.reloadTime *= 0.8; } },
   { id: 'recoil', name: 'STABILIZER', desc: 'LESS CAMERA KICK', apply(g) { g.player.weapon.recoil *= 0.6; } },
   { id: 'crit', name: 'LUCKY ROUNDS', desc: '+8% CHANCE TO CRIT · CRITS DEAL 2× DAMAGE', apply(g) { g.player.weapon.critChance += 0.08; } },
