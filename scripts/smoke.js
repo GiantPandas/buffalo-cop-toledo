@@ -5,7 +5,7 @@ import { CONFIG, comboMultiplier } from '../src/config.js';
 import { ScoreManager } from '../src/core/ScoreManager.js';
 import { Rng } from '../src/utils/rng.js';
 import { RailSystem } from '../src/systems/RailSystem.js';
-import { PARTS, PART_IDS, PART_BY_ID, PAIRS, SETS, resolveBuild, applyBuild, synergiesFor, draftWeight } from '../src/systems/upgrades.js';
+import { PARTS, PART_IDS, PART_BY_ID, PAIRS, SETS, resolveBuild, applyBuild, synergiesFor, draftWeight, buildPowerMul } from '../src/systems/upgrades.js';
 import { Weapon } from '../src/player/Weapon.js';
 
 let failures = 0;
@@ -113,7 +113,13 @@ check(comboMultiplier(30) === 5 && comboMultiplier(999) === 5, 'mult: 30+ = x5')
 // ---------- Weapon config sanity ----------
 check(CONFIG.weapon.magSize >= 20, `weapon: drum mag (${CONFIG.weapon.magSize} rounds)`);
 check(CONFIG.weapon.fireCooldown <= 0.12, `weapon: full-auto rate (${CONFIG.weapon.fireCooldown}s cooldown)`);
-check(CONFIG.boss.hp > 10 && CONFIG.boss.hp / CONFIG.weapon.damage <= 60, `boss hp ${CONFIG.boss.hp} killable at uzi DPS`);
+check(CONFIG.boss.hp > 10 && CONFIG.boss.hp <= 400, `boss hp ${CONFIG.boss.hp} (scaled by build power)`);
+check(CONFIG.boss.scale > CONFIG.buffalos.giant.scale[1] && CONFIG.boss.scale <= 4.2,
+  `boss scale ${CONFIG.boss.scale}: bigger than a giant, still fits the screen`);
+check(Object.keys(CONFIG.boss.dodge).length === 4 && CONFIG.boss.dodge[4].speed > CONFIG.boss.dodge[1].speed
+  && CONFIG.boss.dodge[4].interval < CONFIG.boss.dodge[1].interval,
+  'boss dodge: 4 phase cadences, and he changes lanes faster as he fades');
+check(CONFIG.boss.minDist < CONFIG.boss.maxDist, `boss arena band ${CONFIG.boss.minDist}-${CONFIG.boss.maxDist}m`);
 check(!!CONFIG.buffalos.bandit, 'config: donut bandit variant exists');
 
 // ---------- Weapon parts + synergies ----------
@@ -160,6 +166,13 @@ check(!!CONFIG.buffalos.bandit, 'config: donut bandit variant exists');
   const empty = resolveBuild([]);
   check(empty.add.magSize === CONFIG.weapon.magSize && empty.mul.cooldownMul === 1 && empty.notes.length === 0,
     'resolveBuild: empty loadout is the service-issue gun');
+
+  // Boss HP rides the build so every loadout gets a comparable fight.
+  check(buildPowerMul([]) === 1, 'buildPowerMul: the service-issue gun is the baseline');
+  check(buildPowerMul(['hairtrigger', 'triggerfinger', 'splittip', 'lastshell']) > buildPowerMul(['hairtrigger']),
+    `buildPowerMul: a fuller loadout fights longer (${buildPowerMul(['hairtrigger']).toFixed(2)}x → ${buildPowerMul(['hairtrigger', 'triggerfinger', 'splittip', 'lastshell']).toFixed(2)}x)`);
+  check(buildPowerMul(PART_IDS) <= CONFIG.boss.hpMaxMul,
+    'buildPowerMul: a maxed loadout cannot out-run the boss HP cap');
 
   let g = base(); applyBuild(g, ['drummag']);
   check(g.player.weapon.magSize === CONFIG.weapon.magSize + 12 && g.player.weapon.ammo === g.player.weapon.magSize,

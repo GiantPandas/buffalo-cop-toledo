@@ -479,7 +479,7 @@ function makeDrainageChannel(M) {
 // Every ride ends at a lit last-stand plaza, not a dead street into empty
 // fields: paved apron, police barricade with blinking beacons, floodlights,
 // a final sign, and a themed skyline closing the horizon.
-function buildEndcap({ w, rng, M, curve, roadWidth, worldRoot, anims, facades }) {
+function buildEndcap({ w, rng, M, curve, roadWidth, worldRoot, anims, facades, solidBoxes, boss }) {
   const end = curve.getPointAt(1, new THREE.Vector3());
   const tan = curve.getTangentAt(1, new THREE.Vector3());
   tan.y = 0; tan.normalize();
@@ -573,6 +573,27 @@ function buildEndcap({ w, rng, M, curve, roadWidth, worldRoot, anims, facades })
       addCyl(stack, 1.0, 1.5, hh, 0, hh / 2, 0, M.brickDark, 8);
       addCyl(stack, 1.2, 1.2, 0.9, 0, hh, 0, M.metal, 8);
       place(stack, rng.range(30, 44), rng.sign() * rng.range(12, 30));
+    }
+  }
+
+  // ---- Boss arena cover ----
+  // The finale boss strafes lane to lane, and these two lots are what he ducks
+  // behind. They stand wide of the road on the apron (never on the asphalt),
+  // and their footprint is registered as a solid so a round fired into the lot
+  // stops on the wall instead of reaching the buffalo behind it.
+  if (boss && solidBoxes) {
+    for (const s of [-1, 1]) {
+      const lot = theme === 'farm' ? makeBarn(rng, M)
+        : theme === 'fair' ? makeTent(rng, M)
+        : makeBuilding(rng, M, facades[rng.int(0, facades.length - 1)],
+          rng.range(8, 10), rng.range(7, 8.4), rng.range(8.4, 12.6));
+      // Normalize the lot so it hides a shoulder, not the whole buffalo.
+      const lb = new THREE.Box3().setFromObject(lot);
+      const h = Math.max(0.001, lb.max.y - lb.min.y);
+      lot.scale.setScalar(Math.max(0.5, Math.min(1.4, 7.5 / h)));
+      place(lot, 12 + rng.range(-1, 1), s * (roadWidth / 2 + 6.5 + rng.range(0, 1.6)));
+      lot.updateMatrixWorld(true);
+      solidBoxes.push(new THREE.Box3().setFromObject(lot));
     }
   }
 }
@@ -921,9 +942,18 @@ export function buildWorld(scene, curve, levelData, rng) {
   }
 
   // ---- The dead-end finale: a lit last-stand plaza past the terminus ----
-  buildEndcap({ w, rng, M, curve, roadWidth, worldRoot, anims, facades });
+  buildEndcap({
+    w, rng, M, curve, roadWidth, worldRoot, anims, facades,
+    solidBoxes, boss: !!levelData.boss
+  });
 
-  return { root: worldRoot, anims, solidBoxes };
+  // ---- Cover blockers ----
+  // Tall solid footprints only: a round fired at one of these stops on the
+  // wall. Short furniture (barricade rails, hydrants, cans) is left out so it
+  // never shields the boss.
+  const blockers = solidBoxes.filter((b) => b.max.y >= 2.6 && b.max.y - b.min.y >= 2.6);
+
+  return { root: worldRoot, anims, solidBoxes, blockers };
 }
 
 export function clearWorld(scene, world) {

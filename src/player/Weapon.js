@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
+import { nearestCover } from '../utils/cover.js';
 
 // "UZ-TOLEDO" full-auto machine pistol (view model) + firing/reload logic.
 // Holding the trigger sprays: each shot blooms the aim (crosshair opens),
@@ -290,11 +291,16 @@ export class Weapon {
     for (const s of game.levelManager.shootables) if (s.active) targets.push(s.group);
 
     const hits = this.raycaster.intersectObjects(targets, true);
+    // Cover first: if a building/lot stands between the muzzle and the herd,
+    // the round stops there and sparks on the wall. Intersections come back
+    // near-to-far, so anything past the cover distance is behind the shield.
+    const coverT = this._coverDistance();
     let resolved = false;
     let pierceLeft = Math.max(0, this.pierce | 0);
     let buffHits = 0;
     let lastOwner = null;
     for (const h of hits) {
+      if (h.distance > coverT) break;
       let o = h.object;
       while (o && !o.userData.owner) o = o.parent;
       if (!o || !o.userData.owner) continue;
@@ -341,6 +347,12 @@ export class Weapon {
     cs.rot.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
     cs.spin.set(
       (Math.random() - 0.5) * 26, (Math.random() - 0.5) * 26, (Math.random() - 0.5) * 26);
+  }
+
+  // How far away the nearest cover solid is along the current aim ray. Used to
+  // stop a round on a building so the boss can genuinely duck behind one.
+  _coverDistance() {
+    return nearestCover(this.raycaster.ray, this.game.levelManager.blockers);
   }
 
   // Sparks where a missed bullet smacks into world geometry (asphalt, walls).

@@ -11,6 +11,7 @@ import { LevelManager } from '../systems/LevelManager.js';
 import { Player } from '../player/Player.js';
 import { UIManager } from '../systems/UIManager.js';
 import { PARTS, PART_IDS, PART_BY_ID, applyBuild, draftWeight } from '../systems/upgrades.js';
+import { coverBlocks } from '../utils/cover.js';
 import { LEVELS } from '../levels/index.js';
 
 const THEMES = {
@@ -726,10 +727,12 @@ export class Game {
         const look = rail.sampleAt(Math.min(1, rail.progress + 0.02), new THREE.Vector3());
         this.cameraCtrl.update(sdt, pos, look);
       } else if (this.levelManager.bossActive) {
-        // Gentle idle sway at the end of the rail, looking at the boss.
+        // Gentle idle sway at the end of the rail, looking at the boss's CHEST:
+        // he is tall, and aiming at his feet would put his horns off-screen.
         const pos = rail.sampleAt(1, new THREE.Vector3());
-        const look = this.levelManager.boss
-          ? this.levelManager.boss.group.position.clone()
+        const boss = this.levelManager.boss;
+        const look = boss
+          ? boss.chestPos(new THREE.Vector3())
           : rail.sampleAt(1, new THREE.Vector3());
         look.x += Math.sin(this.time * 0.5) * 0.4;
         look.z += Math.cos(this.time * 0.4) * 0.2;
@@ -763,8 +766,9 @@ export class Game {
     for (const s of this.levelManager.shootables) if (s.active) targets.push(s.group);
     const hits = rc.intersectObjects(targets, true);
     let targeting = false;
-    if (hits.length > 0) {
-      // Only valid targets (buffalo/npc/shootable), not the world.
+    if (hits.length > 0 && !coverBlocks(rc.ray, this.levelManager.blockers, hits[0].distance)) {
+      // Only valid targets (buffalo/npc/shootable), not the world — and not
+      // one hiding behind a building, which is what the crosshair is for.
       targeting = true;
     }
     const w = this.player.weapon;

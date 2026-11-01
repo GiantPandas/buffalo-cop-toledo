@@ -134,10 +134,25 @@ boss: {
 }
 ```
 
-The boss (hp in `CONFIG.boss`) starts a multi-phase fight when the rail ends:
-phases escalate at 75/50/25% hp — charges, cover movement between obstacles,
-and minion spawns. Obstacle barrels are shootable; the boss rams them during
-charges.
+The boss starts a multi-phase fight when the rail ends: phases escalate at
+75/50/25% hp — charges, minion spawns, and a lane-to-lane dodge that runs in
+every phase. He works the plaza behind the two lots the endcap builds beside the
+arena (`buildEndcap` registers them as solids when the level has a boss), so his
+outer shoulder goes behind a wall while his head stays shootable. Rounds stop on
+tall world solids (`LevelManager.blockers`, via `src/utils/cover.js`), so cover
+really shields him and the missed shot sparks on the building.
+
+Framing and difficulty knobs live in `CONFIG.boss`:
+- `scale` — sized to fit the boss camera (the fight camera looks at his chest,
+  not his feet), still visibly bigger than a `giant`.
+- `minDist` / `maxDist` — the depth band he is clamped to; a charge stops at
+  `minDist` and shoves you (`contactDamage`) before falling back behind cover.
+- `dodge` — per-phase lane-hold interval and crossing speed.
+- `hp` — baseline multiplied by `buildPowerMul(ownedParts)` (`upgrades.js`), so
+  an issue drum and a maxed parts build get the same ~25s fight.
+
+Obstacle barrels are shootable; the boss rams them during charges, judged
+against the charge path (he charges from whichever lane he is in).
 
 ## Creating an enemy / variant
 
@@ -175,7 +190,8 @@ scripts/
   world-clearance.js  Builds every level's world in Node and fails if any object
                       footprint sits on the asphalt
   headless-test.mjs   Headless Chrome CDP integration test of the full game loop
-  boss-probe.mjs      Boss-fight aim/damage diagnostic probe
+  boss-probe.mjs      Boss-fight probe: framing, dodge movement and cover blocking,
+                      with a pass/fail verdict (needs Chrome + a built dist)
 ```
 
 ## Tests
@@ -184,6 +200,7 @@ scripts/
 node scripts/smoke.js            # logic tests (no browser needed)
 node scripts/world-clearance.js  # world clearance: nothing may block the roadway
 node scripts/headless-test.mjs   # full in-browser integration test (needs Chrome)
+node scripts/boss-probe.mjs      # boss framing/dodge/cover verdict (needs Chrome)
 node scripts/music-probe.mjs     # drives the music sequencer with a mock AudioContext
 node scripts/spawn-audit.mjs     # reports spawn pacing per level (reaction times, alive peaks)
 ```

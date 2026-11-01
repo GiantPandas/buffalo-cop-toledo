@@ -39,8 +39,27 @@ export const CONFIG = {
     giant: { hp: 9, speed: 0, scale: [3, 3] }
   },
   boss: {
-    hp: 46,
-    name: 'THE BIGGEST BUFFALO IN TOLEDO'
+    // HP is a baseline: it gets multiplied by the run's gun power (see
+    // buildPowerMul) so the fight lasts the same ~25s whether you show up with
+    // the service-issue drum or a maxed-out parts build.
+    hp: 150,
+    hpMaxMul: 6,
+    name: 'THE BIGGEST BUFFALO IN TOLEDO',
+    // Framing: giants are scale 3, so he has to read as bigger — but at 5.2 his
+    // horns left the screen. This fits the boss-fight camera at both ends of
+    // his dodge band.
+    scale: 3.8,
+    minDist: 10,   // a charge stops here (he hits you, not the lens)
+    maxDist: 30,   // dodging never slides him out of frame
+    contactDamage: 20,
+    // Per-phase dodge cadence: how long he holds a lane, and how fast he
+    // crosses to the next one. Later phases hold shorter and cross faster.
+    dodge: {
+      1: { interval: 6.5, speed: 3.2 },
+      2: { interval: 4.4, speed: 4.4 },
+      3: { interval: 3.2, speed: 5.6 },
+      4: { interval: 2.4, speed: 6.8 }
+    }
   },
   difficulty: {
     easy:   { telegraph: 1.35, chargeSpeed: 0.75, spawnScale: 0.8, damageTaken: 0.6, label: 'EASY' },

@@ -165,6 +165,7 @@ export class LevelManager {
     this.levelData = null;
     this.rail = null;
     this.world = null;
+    this.blockers = [];    // tall solid footprints (cover) that stop a round
     this.shootables = [];
     this.obstacles = [];   // {pos, active} for boss phase-2
     this.events = [];
@@ -187,6 +188,7 @@ export class LevelManager {
     for (const s of this.shootables) s.dispose(game);
     this.shootables = [];
     this.obstacles = [];
+    this.blockers = [];
     this.boss = null;
     this.bossActive = false;
     this.pendingEnc = [];
@@ -215,6 +217,9 @@ export class LevelManager {
 
     // Build the world.
     this.world = buildWorld(game.scene, this.rail.posCurve, data, this.rng);
+    // Cover list for the boss fight: buildings and lots tall enough to stop a
+    // round. Anything at or below head height stays transparent to shooting.
+    this.blockers = (this.world.blockers || []).slice();
 
     // Merge events + encounters into one time-sorted list.
     const items = [];

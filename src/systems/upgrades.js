@@ -342,3 +342,17 @@ export function draftWeight(partId, ownedIds) {
   if (synergiesFor(partId, ownedIds).some((s) => s.live)) weight *= 1.9;
   return weight;
 }
+
+/** Rough damage-per-second vs the service-issue gun, for scaling boss HP.
+ *  Rate comes from the cooldown multiplier plus the sustained-fire ramp; damage
+ *  from flat damage, crits and HEAT; precision parts pay off on a head that is
+ *  already a double hit. */
+export function buildPowerMul(ownedIds) {
+  const { add, mul } = resolveBuild(ownedIds || []);
+  const rate = (1 + add.holdRamp * 0.75) / Math.max(0.2, mul.cooldownMul);
+  const damage = (add.damage / CONFIG.weapon.damage)
+    * (1 + add.critChance * 0.6)
+    * (1 + add.heatDamage * 1.2);
+  const precision = 1 + 0.35 * (add.headshotBonus / CONFIG.weapon.damage + add.precisionMul);
+  return clamp(damage * rate * precision, [1, 6]);
+}
