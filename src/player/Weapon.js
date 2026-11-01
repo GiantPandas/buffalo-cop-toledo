@@ -16,15 +16,25 @@ export class Weapon {
     this.critChance = 0;   // chance per shot to deal double damage
     this.pierce = 0;      // extra buffalo a bullet can pass through
     this.headshotBonus = 0;
+    this.precisionMul = 0;  // MARKSMAN COURSE: fractional extra damage on head hits
     this.bloom = 0;         // 0..1 trigger-hold spread bloom
     this.spreadScale = 1;   // DOT SIGHT upgrade multiplies this down
+    this.bloomGrowMul = 1;  // FULL THROTTLE sprays it wider, PARADE STOCK slower
+    this.bloomDecayMul = 1; // MARKSMAN parts converge faster
     this.holdRamp = 0;      // TRIGGER FINGER upgrade: sustained-fire rate bonus
+    this.heatRate = 0;      // TOLEDO HEAT: fire rate per combo tier above x1
+    this.heatDamage = 0;    // TOLEDO HEAT: damage per combo tier above x1
+    this.focusRate = 0;     // TIME CRIME: extra rate while bullet time is up
+    this.lastShell = 0;     // LAST SHELL STANCE: last N rounds in the drum double
+    this.tacticalReload = 0;// CASE CATCH: drum fraction that triggers a fast reload
+    this.tacticalCut = 0;   // fraction of the reload time the tactical reload removes
     this._holdTime = 0;
     this._jitter = { x: 0, y: 0, tx: 0, ty: 0 }; // smooth aim wobble vector
     this.ammo = this.magSize;
     this.cooldown = 0;
     this.reloading = false;
     this.reloadTimer = 0;
+    this._reloadDur = this.reloadTime; // actual duration of the current reload
     this.kick = 0;        // visual recoil offset
     this.raycaster = new THREE.Raycaster();
 
@@ -180,18 +190,33 @@ export class Weapon {
   // Current visual spread bloom (0..1), scaled by the DOT SIGHT upgrade.
   get aimBloom() { return Math.min(1, this.bloom * this.spreadScale); }
 
-  // Upgrade hook: mutate an instance stat; a bigger drum tops the mag up too.
+  // Upgrade hook kept for callers that nudge one stat directly.
   addStat(stat, delta) {
     this[stat] += delta;
     if (stat === 'magSize') this.ammo = Math.min(this.ammo + delta, this.magSize);
   }
 
-  // TRIGGER FINGER: holding the trigger steadily tightens the cooldown,
-  // ramping the fire rate toward +40% after ~1.5s of sustained spray.
+  // Rate bonuses stack additively, then invert into a cooldown multiplier:
+  // TRIGGER FINGER (sustained hold), TOLEDO HEAT (combo tiers), TIME CRIME
+  // (bullet time). 30%/40%/90% of extra rate reads as one clean number here.
   _cooldownMul() {
-    if (this.holdRamp <= 0) return 1;
-    const ramp = Math.min(1, Math.max(0, (this._holdTime - 0.45) / 1.1));
-    return 1 / (1 + this.holdRamp * ramp);
+    let boost = 0;
+    if (this.holdRamp > 0) {
+      const ramp = Math.min(1, Math.max(0, (this._holdTime - 0.45) / 1.1));
+      boost += this.holdRamp * ramp;
+    }
+    if (this.heatRate > 0) boost += this.heatRate * (this.game.score.multiplier - 1);
+    if (this.focusRate > 0 && this.game.focus.active) boost += this.focusRate;
+    return boost > 0 ? 1 / (1 + boost) : 1;
+  }
+
+  // Damage this round would deal, before crit/precision. LAST SHELL STANCE
+  // doubles the end of the drum, TOLEDO HEAT pays out on combo tiers.
+  currentDamage() {
+    let dmg = this.damage;
+    if (this.lastShell > 0 && this.ammo <= this.lastShell) dmg *= 2;
+    if (this.heatDamage > 0) dmg *= 1 + this.heatDamage * (this.game.score.multiplier - 1);
+    return dmg;
   }
 
   // Restore base stats + a full mag (called on a fresh run).
@@ -204,9 +229,18 @@ export class Weapon {
     this.critChance = 0;
     this.pierce = 0;
     this.headshotBonus = 0;
+    this.precisionMul = 0;
     this.bloom = 0;
     this.spreadScale = 1;
+    this.bloomGrowMul = 1;
+    this.bloomDecayMul = 1;
     this.holdRamp = 0;
+    this.heatRate = 0;
+    this.heatDamage = 0;
+    this.focusRate = 0;
+    this.lastShell = 0;
+    this.tacticalReload = 0;
+    this.tacticalCut = 0;
     this._holdTime = 0;
     this._jitter.x = this._jitter.y = this._jitter.tx = this._jitter.ty = 0;
     for (const c of this._casings) { c.active = false; c.parked = false; }
@@ -214,6 +248,7 @@ export class Weapon {
     this.cooldown = 0;
     this.reloading = false;
     this.reloadTimer = 0;
+    this._reloadDur = this.reloadTime;
   }
 
   fire() {
@@ -226,9 +261,11 @@ export class Weapon {
     }
 
     this.ammo--;
-    this.cooldown = this.fireCooldown * this._cooldownMul();
+    // Rate bonuses can stack hard (ramp + combo heat + bullet time), so clamp
+    // the effective cooldown: ~55 rounds/sec is the arcade ceiling.
+    this.cooldown = Math.max(0.018, this.fireCooldown * this._cooldownMul());
     this.kick = 1;
-    this.bloom = Math.min(1, this.bloom + CONFIG.weapon.bloomPerShot);
+    this.bloom = Math.min(1, this.bloom + CONFIG.weapon.bloomPerShot * this.bloomGrowMul);
     this._flashTimer = 0.05;
     this._boltTimer = 0.09;
     this.flashMat.opacity = 0.7 + Math.random() * 0.3;
@@ -255,6 +292,7 @@ export class Weapon {
     const hits = this.raycaster.intersectObjects(targets, true);
     let resolved = false;
     let pierceLeft = Math.max(0, this.pierce | 0);
+    let buffHits = 0;
     let lastOwner = null;
     for (const h of hits) {
       let o = h.object;
@@ -268,6 +306,7 @@ export class Weapon {
       // Buffalo / boss. Head/horn/muzzle hits are precision kills.
       const isHead = !!(owner.headMeshes && this._headHit(hits, owner));
       game.onBuffaloHit(owner, isHead, h.point);
+      if (buffHits++ > 0) game.onRoundPierce(owner); // OVERMATCH / HERD MARK pay per pierce
       resolved = true;
       lastOwner = owner;
       if (pierceLeft > 0) { pierceLeft--; continue; } // Hollow Points: keep going.
@@ -352,8 +391,11 @@ export class Weapon {
 
   reload() {
     if (this.reloading || this.ammo === this.magSize) return;
+    // CASE CATCH: a mostly-full drum gets topped off with a quick tactical reload.
+    const tactical = this.tacticalCut > 0 && this.ammo >= this.magSize * this.tacticalReload;
     this.reloading = true;
-    this.reloadTimer = this.reloadTime;
+    this._reloadDur = this.reloadTime * (tactical ? 1 - this.tacticalCut : 1);
+    this.reloadTimer = this._reloadDur;
     this.game.audio.reloadStart();
   }
 
@@ -368,7 +410,7 @@ export class Weapon {
 
     // Convergence: bloom relaxes when you let off; the aim wobble drifts
     // smoothly so spraying walks the shots around instead of teleporting them.
-    this.bloom = Math.max(0, this.bloom - dt * CONFIG.weapon.bloomDecay);
+    this.bloom = Math.max(0, this.bloom - dt * CONFIG.weapon.bloomDecay * this.bloomDecayMul);
     const j = this._jitter;
     if (Math.random() < dt * 10) {
       j.tx = Math.random() * 2 - 1;
@@ -389,7 +431,7 @@ export class Weapon {
     // Reload state machine.
     if (this.reloading) {
       this.reloadTimer -= dt;
-      const t = 1 - Math.max(0, this.reloadTimer) / this.reloadTime;
+      const t = 1 - Math.max(0, this.reloadTimer) / (this._reloadDur || this.reloadTime);
       // Dip the gun; drum mag drops out of the grip, fresh mag rises in.
       this.model.rotation.x = Math.sin(t * Math.PI) * 0.9;
       let dy = 0;
@@ -465,9 +507,12 @@ export class Weapon {
       if (dirty) cm.instanceMatrix.needsUpdate = true;
     }
 
-    // Status strip: cyan ready, amber low ammo, red reloading/empty.
+    // Status strip: cyan ready, amber low ammo, red reloading/empty. When
+    // LAST SHELL STANCE is armed the last rounds glow hot — empty the gun.
+    const hot = this.lastShell > 0 && this.ammo < this.lastShell;
     this.statusMat.color.setHex(
       this.reloading || this.ammo === 0 ? 0xff3b3b
+      : hot ? 0xffd23e
       : this.ammo <= Math.ceil(this.magSize * 0.15) ? 0xffa13b : 0x39d7ff
     );
 

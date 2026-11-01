@@ -10,7 +10,7 @@ import { EnemyManager } from '../systems/EnemyManager.js';
 import { LevelManager } from '../systems/LevelManager.js';
 import { Player } from '../player/Player.js';
 import { UIManager } from '../systems/UIManager.js';
-import { UPGRADES, UPGRADE_IDS } from '../systems/upgrades.js';
+import { PARTS, PART_IDS, PART_BY_ID, applyBuild, draftWeight } from '../systems/upgrades.js';
 import { LEVELS } from '../levels/index.js';
 
 const THEMES = {
@@ -41,12 +41,15 @@ export class Game {
     this.save = new SaveManager();
     this.options = { ...this.save.options };
     this.score = new ScoreManager();
-    this.upgradePool = [...UPGRADE_IDS]; // remaining picks for this run
+    this.upgradePool = [...PART_IDS]; // parts still in the draft this run
     this._lastUpgrade = null;
-    // Mechanic flags set by rare/epic upgrades (see systems/upgrades.js).
-    this.luckyMiss = false;   // LUCKY TIE: some misses spare the combo
-    this.stunOnKill = false;  // FLASH STEER: kills stun nearby buffalo
-    this.killCash = 0;        // CHROME BUMPER: bounty paid per kill
+    // Weapon build: owned part ids + the derived flags/notes resolveBuild() wrote.
+    this.build = [];
+    this.buildFlags = {
+      luckyMiss: false, stunOnKill: false, bountyCombo: false,
+      killCash: 0, pierceScore: 0, stunRadius: 9, stunTime: 1.6
+    };
+    this.buildNotes = [];
 
     // Renderer (graceful fallback if WebGL is unavailable).
     let renderer;
@@ -342,58 +345,64 @@ export class Game {
   resetUpgrades() {
     this.player.weapon.reset();
     this.player.resetRun();
-    this.upgradePool = [...UPGRADE_IDS];
+    this.build = [];
+    this.upgradePool = [...PART_IDS];
     this._lastUpgrade = null;
-    this.luckyMiss = false;
-    this.stunOnKill = false;
-    this.killCash = 0;
-    this.ui.setMagSize(this.player.weapon.magSize);
+    // Recomputes every derived stat, flag and note from the (empty) loadout.
+    applyBuild(this, this.build);
   }
 
   _rollUpgrades() {
-    // Rarity-weighted draft: commons are plentiful, epics a rare thrill.
-    // Never re-offers the last pick (run is short; variety is the fun).
-    const weight = { common: 2.4, rare: 1.6, epic: 1 };
-    const defOf = (id) => UPGRADES.find((u) => u.id === id);
+    // Rarity-weighted draft, biased toward synergy: a part that would complete
+    // a pair or a set right now is almost twice as likely to show up.
     const ids = [...this.upgradePool];
-    if (ids.some((id) => !defOf(id))) {
+    if (ids.some((id) => !PART_BY_ID[id])) {
       // Never soft-lock the pick screen on a bad id (stale pool, stale module).
-      this.upgradePool = [...UPGRADE_IDS];
+      this.upgradePool = [...PART_IDS];
       this._lastUpgrade = null;
-      return UPGRADES.slice(0, 3);
+      return PARTS.slice(0, 3);
     }
     const last = ids.indexOf(this._lastUpgrade);
     if (ids.length > 1 && last >= 0) ids.splice(last, 1);
     const picks = [];
     while (picks.length < 3 && ids.length > 0) {
       let total = 0;
-      for (const id of ids) total += weight[defOf(id).rarity];
+      for (const id of ids) total += draftWeight(id, this.build);
       let r = Math.random() * total;
       let idx = 0;
       for (let i = 0; i < ids.length; i++) {
-        r -= weight[defOf(ids[i]).rarity];
+        r -= draftWeight(ids[i], this.build);
         if (r <= 0) { idx = i; break; }
       }
       picks.push(ids.splice(idx, 1)[0]);
     }
-    return picks.map(defOf);
+    return picks.map((id) => PART_BY_ID[id]);
   }
 
   pickUpgrade(id) {
     if (this.state !== 'upgrades') return;
-    const def = UPGRADES.find((u) => u.id === id);
-    if (!def || !this.upgradePool.includes(id)) return;
-    def.apply(this);
-    this._lastUpgrade = id;
+    const part = PART_BY_ID[id];
+    if (!part || !this.upgradePool.includes(id)) return;
     this.upgradePool.splice(this.upgradePool.indexOf(id), 1);
-    if (id === 'magsize' || id === 'fullthrottle') this.ui.setMagSize(this.player.weapon.magSize);
+    this.build.push(id);
+    if (part.once) part.once(this); // one-shot effects (medkit heal) never re-fire
+    const ownedBefore = new Set(this.buildNotes.map((n) => n.label));
+    applyBuild(this, this.build);
+    this._lastUpgrade = id;
     this.audio.uiSelect();
+
+    const gained = this.buildNotes.filter((n) => !ownedBefore.has(n.label));
+    if (gained.length) {
+      this.showBigText(`${gained[0].label} ACTIVE`, 1.6);
+      this.announce(gained.map((n) => n.desc).join(' '));
+    }
+
     if (this._pickIsLoadout) {
       // Loadout picked: roll to the briefing for mission one.
       this._pickIsLoadout = false;
       this.startLevel(this._pendingLevel || 0);
     } else {
-      // Advance to the next mission with the new stat in hand.
+      // Advance to the next mission with the new part in hand.
       this.startLevel(this.currentLevelId);
     }
   }
@@ -448,7 +457,8 @@ export class Game {
     this.ui.flashHitMarker(this.input.mouse.x, this.input.mouse.y);
 
     const w = this.player.weapon;
-    let dmg = w.damage + (isHead ? w.headshotBonus : 0);
+    let dmg = w.currentDamage();
+    if (isHead) dmg += w.headshotBonus + dmg * w.precisionMul; // notch + marksman course
     let crit = false;
     if (w.critChance > 0 && Math.random() < w.critChance) { dmg *= 2; crit = true; this.audio.crit(); }
     buffalo.damage(dmg, isHead);
@@ -504,19 +514,21 @@ export class Game {
 
   onBuffaloKilled(buffalo) {
     this.stats.killed++;
-    if (this.killCash > 0) {
-      // CHROME BUMPER: the city pays per head.
-      const bounty = Math.round(this.killCash * this.score.bonusMul);
+    const f = this.buildFlags;
+    if (f.killCash > 0) {
+      // CHROME BUMPER: the city pays per head. GRANT MONEY scales with combo.
+      const tier = 1 + (f.bountyCombo ? (this.score.multiplier - 1) * 0.5 : 0);
+      const bounty = Math.round(f.killCash * tier * this.score.bonusMul);
       this.score.addFlat(bounty);
       this.ui.updateScore(this.score.score);
     }
-    if (this.stunOnKill) {
+    if (f.stunOnKill) {
       // FLASH STEER: the kill pops a flash that rattles nearby buffalo.
       const pos = buffalo.group.position;
       for (const other of this.enemyManager.buffalos) {
         if (other !== buffalo && other.alive && other.variant !== 'boss' &&
-            other.group.position.distanceTo(pos) <= 9) {
-          other.forceStagger(1.6);
+            other.group.position.distanceTo(pos) <= f.stunRadius) {
+          other.forceStagger(f.stunTime);
         }
       }
       this.particles.spawnBurst(pos.clone().setY(1.3), {
@@ -632,9 +644,20 @@ export class Game {
   }
 
   onMiss() {
-    if (this.luckyMiss && Math.random() < 0.35) return; // LUCKY TIE keeps the streak
+    if (this.buildFlags.luckyMiss && Math.random() < 0.35) return; // LUCKY TIE keeps the streak
     this.score.breakCombo();
     this.ui.showCombo();
+  }
+
+  // A round that pierces into a second buffalo pays OVERMATCH / HERD MARK.
+  onRoundPierce(buffalo) {
+    const pay = this.buildFlags.pierceScore;
+    if (pay <= 0) return;
+    const bonus = Math.round(pay * this.score.bonusMul);
+    this.score.addFlat(bonus);
+    this.ui.updateScore(this.score.score);
+    const sp = this._projectToScreen(buffalo.group.position.clone().setY(1.6));
+    this.ui.spawnDamageFloat(sp.x, sp.y, bonus, { pierce: true });
   }
 
   onCivilianShot(npc) {

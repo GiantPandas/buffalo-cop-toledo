@@ -5,7 +5,8 @@ import { CONFIG, comboMultiplier } from '../src/config.js';
 import { ScoreManager } from '../src/core/ScoreManager.js';
 import { Rng } from '../src/utils/rng.js';
 import { RailSystem } from '../src/systems/RailSystem.js';
-import { UPGRADES } from '../src/systems/upgrades.js';
+import { PARTS, PART_IDS, PART_BY_ID, PAIRS, SETS, resolveBuild, applyBuild, synergiesFor, draftWeight } from '../src/systems/upgrades.js';
+import { Weapon } from '../src/player/Weapon.js';
 
 let failures = 0;
 function check(cond, msg) {
@@ -115,7 +116,7 @@ check(CONFIG.weapon.fireCooldown <= 0.12, `weapon: full-auto rate (${CONFIG.weap
 check(CONFIG.boss.hp > 10 && CONFIG.boss.hp / CONFIG.weapon.damage <= 60, `boss hp ${CONFIG.boss.hp} killable at uzi DPS`);
 check(!!CONFIG.buffalos.bandit, 'config: donut bandit variant exists');
 
-// ---------- Roguelike upgrades ----------
+// ---------- Weapon parts + synergies ----------
 {
   const base = () => ({
     player: {
@@ -123,44 +124,102 @@ check(!!CONFIG.buffalos.bandit, 'config: donut bandit variant exists');
         magSize: CONFIG.weapon.magSize, fireCooldown: CONFIG.weapon.fireCooldown,
         reloadTime: CONFIG.weapon.reloadTime, recoil: CONFIG.weapon.recoil,
         damage: CONFIG.weapon.damage, ammo: CONFIG.weapon.magSize,
-        critChance: 0, pierce: 0, headshotBonus: 0, spreadScale: 1, holdRamp: 0,
-        addStat(stat, delta) { this[stat] += delta; if (stat === 'magSize') this.ammo = this.magSize; }
+        critChance: 0, pierce: 0, headshotBonus: 0, precisionMul: 0, spreadScale: 1,
+        bloomGrowMul: 1, bloomDecayMul: 1, holdRamp: 0, heatRate: 0, heatDamage: 0,
+        focusRate: 0, lastShell: 0, tacticalReload: 0, tacticalCut: 0
       },
       maxHp: 100, hp: 100, damageReduction: 0, flatDamageReduction: 0,
       heal(n) { this.hp = Math.min(this.maxHp, this.hp + n); }
     },
-    score: { bonusMul: 1 }
+    score: { bonusMul: 1 },
+    ui: { setMagSize() {} }
   });
-  check(UPGRADES.length >= 3, `upgrades: pool has ${UPGRADES.length} entries`);
-  const ids = new Set(UPGRADES.map((u) => u.id));
-  check(ids.size === UPGRADES.length, 'upgrades: unique ids');
-  const rarities = UPGRADES.map((u) => u.rarity);
-  check(rarities.every((r) => r === 'common' || r === 'rare' || r === 'epic'), 'upgrades: valid rarity on every def');
-  check(new Set(rarities).size >= 2, 'upgrades: rarity tiers present');
-  for (const u of UPGRADES) {
-    check(!!u.icon && !!u.flavor, `upgrade ${u.id} has icon + flavor`);
-    const g = base(); u.apply(g);
-    const w = g.player.weapon;
-    check(Number.isFinite(w.damage + w.magSize + w.fireCooldown + w.spreadScale), `upgrade ${u.id} leaves finite stats`);
-  }
-  let g = base(); UPGRADES.find((u) => u.id === 'magsize').apply(g);
-  check(g.player.weapon.magSize === CONFIG.weapon.magSize + 10 && g.player.weapon.ammo === CONFIG.weapon.magSize + 10, 'drum mag: +10 and tops off mag');
-  g = base(); UPGRADES.find((u) => u.id === 'hairtrigger').apply(g);
-  check(g.player.weapon.damage === CONFIG.weapon.damage + 1, 'hair trigger: +1 per shot');
-  g = base(); UPGRADES.find((u) => u.id === 'sights').apply(g);
-  check(g.player.weapon.spreadScale < 1, `dot sight: spread reduced (${g.player.weapon.spreadScale.toFixed(2)})`);
-  g = base(); UPGRADES.find((u) => u.id === 'triggerfinger').apply(g);
-  check(g.player.weapon.holdRamp > 0, 'trigger finger: hold ramp armed');
-  g = base(); UPGRADES.find((u) => u.id === 'fullthrottle').apply(g);
-  check(g.player.weapon.fireCooldown < CONFIG.weapon.fireCooldown && g.player.weapon.magSize > CONFIG.weapon.magSize, 'full throttle: faster + deeper drum');
-  g = base(); UPGRADES.find((u) => u.id === 'lucky').apply(g);
-  check(g.luckyMiss === true, 'lucky tie: combo-saver flag set');
-  g = base(); UPGRADES.find((u) => u.id === 'chrome').apply(g);
-  check(g.killCash >= 150, 'chrome bumper: bounty per kill');
-  g = base(); UPGRADES.find((u) => u.id === 'flashbang').apply(g);
-  check(g.stunOnKill === true, 'flash steer: kill-stun flag set');
-  g = base(); UPGRADES.find((u) => u.id === 'plate').apply(g);
-  check(g.player.flatDamageReduction >= 1 && g.player.hp > 90, 'ram plating: flat reduction + heal');
+
+  check(PARTS.length >= 15, `parts: pool has ${PARTS.length} entries`);
+  const ids = new Set(PARTS.map((p) => p.id));
+  check(ids.size === PARTS.length, 'parts: unique ids');
+  check(PARTS.every((p) => ['common', 'rare', 'epic'].includes(p.rarity)), 'parts: valid rarity on every part');
+  check(new Set(PARTS.map((p) => p.rarity)).size === 3, 'parts: all three rarity tiers present');
+  check(PARTS.every((p) => p.tags.length > 0 && !!p.icon && !!p.name && !!p.desc && !!p.flavor),
+    'parts: tags + icon + name + desc + flavor on every part');
+  check(PARTS.every((p) => p.add || p.mul || p.flag || p.once), 'parts: every part does something');
+  check(PARTS.every((p) => !p.apply), 'parts: declarative (no imperative apply hooks)');
+  check(PARTS.filter((p) => p.add || p.mul || p.once).length >= PARTS.length * 0.7,
+    'parts: mostly weapon-focused, not score-only');
+  check(PAIRS.every((pr) => ids.has(pr.a) && ids.has(pr.b) && pr.a !== pr.b), 'pairs: every partner id exists');
+  const tagNames = new Set(PARTS.flatMap((p) => p.tags));
+  check(SETS.every((s) => tagNames.has(s.tag) && s.need >= 2), 'sets: every tag exists and needs 2+ parts');
+  check(SETS.every((s) => PARTS.filter((p) => p.tags.includes(s.tag)).length >= s.need),
+    'sets: every set is actually reachable');
+
+  // Derived build: order-independent, idempotent, capped.
+  const pick = ['drummag', 'sights', 'hairtrigger', 'hollow'];
+  const a = resolveBuild(pick), b = resolveBuild([...pick].reverse()), c = resolveBuild([...pick, ...pick]);
+  check(JSON.stringify(a) === JSON.stringify(b), 'resolveBuild: pick order changes nothing');
+  check(JSON.stringify(a) === JSON.stringify(c), 'resolveBuild: picking twice changes nothing');
+  const empty = resolveBuild([]);
+  check(empty.add.magSize === CONFIG.weapon.magSize && empty.mul.cooldownMul === 1 && empty.notes.length === 0,
+    'resolveBuild: empty loadout is the service-issue gun');
+
+  let g = base(); applyBuild(g, ['drummag']);
+  check(g.player.weapon.magSize === CONFIG.weapon.magSize + 12 && g.player.weapon.ammo === g.player.weapon.magSize,
+    'drum mag: +12 rounds and tops off the drum');
+  g = base(); applyBuild(g, ['drummag', 'speedload']);
+  check(g.player.weapon.magSize === CONFIG.weapon.magSize + 20, 'LOGISTICS BEAT: +20 rounds across the pair');
+  check(g.player.weapon.reloadTime < CONFIG.weapon.reloadTime * 0.6,
+    `LOGISTICS BEAT: reload ${g.player.weapon.reloadTime.toFixed(2)}s beats either part alone`);
+  g = base(); applyBuild(g, ['sights', 'parade']);
+  check(g.player.weapon.spreadScale < 0.45, `STEADY HAND: spread ${g.player.weapon.spreadScale.toFixed(2)}`);
+  check(g.buildNotes.some((n) => n.label === 'STEADY HAND' && n.kind === 'pair'), 'pair note recorded');
+  check(g.buildNotes.some((n) => n.label === 'MARKSMAN LIST' && n.kind === 'set'), 'set note recorded');
+  g = base(); applyBuild(g, ['drummag', 'casecatch']);
+  check(g.player.weapon.tacticalCut > 0 && g.player.weapon.tacticalReload <= 0.45,
+    'COMBAT RELOAD: tactical top-off threshold lowered');
+  g = base(); applyBuild(g, ['hollow', 'splittip']);
+  check(g.player.weapon.pierce === 2 && g.buildFlags.pierceScore === 125, 'OVERMATCH: double pierce + bounty per pierce');
+  g = base(); applyBuild(g, ['timecrime', 'flashbang']);
+  check(g.buildFlags.stunOnKill && g.buildFlags.stunRadius > 9 && g.buildFlags.stunTime > 1.6,
+    'CROWD CONTROL: flash stun reaches further and holds longer');
+  g = base(); applyBuild(g, ['chrome', 'review']);
+  check(g.buildFlags.killCash >= 270 && g.buildFlags.bountyCombo, 'GRANT MONEY: bigger bounty that scales with combo');
+  check(g.score.bonusMul > 1.35, `CITY CONTRACT set: score ×${g.score.bonusMul.toFixed(2)}`);
+  g = base(); applyBuild(g, ['chrome', 'review', 'lucky']);
+  check(g.score.bonusMul > 1.5, `INSURANCE FRAUD on top of the set: score ×${g.score.bonusMul.toFixed(2)}`);
+  g = base(); applyBuild(g, ['lucky']);
+  check(g.buildFlags.luckyMiss === true, 'lucky tie: combo-saver flag set');
+  g = base(); applyBuild(g, ['vest']);
+  check(g.player.damageReduction === 0.15, 'kevlar vest: charge damage reduction');
+  g = base(); g.player.hp = 90; PART_BY_ID.medkit.once(g);
+  check(g.player.hp === 93, 'medkit heals once at pick time');
+
+  g = base(); applyBuild(g, PART_IDS);
+  const w = g.player.weapon;
+  check(w.damage <= 8 && w.magSize <= 90 && w.fireCooldown > 0.02 && w.spreadScale >= 0.22 &&
+    Number.isFinite(w.reloadTime + w.recoil + w.holdRamp + w.focusRate),
+    `maxed build stays inside caps (dmg ${w.damage}, drum ${w.magSize}, cd ${w.fireCooldown.toFixed(3)})`);
+
+  // Card UI helper: live vs. hinted synergies.
+  const syn = synergiesFor('speedload', ['drummag']);
+  check(syn.some((s) => s.live && s.label === 'LOGISTICS BEAT'), 'synergiesFor: live pair flagged');
+  check(syn.some((s) => !s.live && s.partner.includes('FEED')), 'synergiesFor: set hint shown as a partner');
+  check(draftWeight('speedload', ['drummag']) > draftWeight('speedload', []),
+    'draft: synergy-completing parts are offered more often');
+  // Live weapon math (prototype methods on a stubbed gun).
+  const gun = Object.create(Weapon.prototype);
+  gun.game = { score: { multiplier: 3 }, focus: { active: false } };
+  gun.damage = CONFIG.weapon.damage; gun.ammo = CONFIG.weapon.magSize;
+  gun.holdRamp = 0; gun.heatRate = 0; gun.heatDamage = 0; gun.focusRate = 0;
+  gun.lastShell = 0; gun._holdTime = 0;
+  check(gun._cooldownMul() === 1 && gun.currentDamage() === CONFIG.weapon.damage,
+    'service-issue gun: no rate or damage bonus');
+  gun.lastShell = 5; gun.ammo = 5; // the last 5 rounds of the drum
+  check(gun.currentDamage() === CONFIG.weapon.damage * 2, 'LAST SHELL STANCE: last rounds hit for double');
+  gun.ammo = 6;
+  check(gun.currentDamage() === CONFIG.weapon.damage, 'LAST SHELL STANCE: stops at one round to spare');
+  gun.lastShell = 0; gun.heatDamage = 0.05; gun.heatRate = 0.09; gun.focusRate = 0.9; gun.holdRamp = 0.45;
+  gun._holdTime = 1.6; gun.game.focus.active = true;
+  check(gun.currentDamage() > CONFIG.weapon.damage * 1.09, 'TOLEDO HEAT: combo tiers add damage');
+  check(gun._cooldownMul() < 0.42, `SUPPRESSION stack: rate ×${(1 / gun._cooldownMul()).toFixed(2)} at x3 combo in bullet time`);
 }
 
 console.log(failures === 0 ? '\nALL SMOKE TESTS PASSED' : `\n${failures} FAILURES`);
