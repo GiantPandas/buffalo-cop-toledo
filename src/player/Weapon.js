@@ -180,6 +180,12 @@ export class Weapon {
   // Current visual spread bloom (0..1), scaled by the DOT SIGHT upgrade.
   get aimBloom() { return Math.min(1, this.bloom * this.spreadScale); }
 
+  // Upgrade hook: mutate an instance stat; a bigger drum tops the mag up too.
+  addStat(stat, delta) {
+    this[stat] += delta;
+    if (stat === 'magSize') this.ammo = Math.min(this.ammo + delta, this.magSize);
+  }
+
   // TRIGGER FINGER: holding the trigger steadily tightens the cooldown,
   // ramping the fire rate toward +40% after ~1.5s of sustained spray.
   _cooldownMul() {

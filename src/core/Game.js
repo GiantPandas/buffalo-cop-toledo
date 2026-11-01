@@ -354,7 +354,14 @@ export class Game {
     const weight = { common: 2.4, rare: 1.6, epic: 1 };
     const defOf = (id) => UPGRADES.find((u) => u.id === id);
     const ids = [...this.upgradePool];
-    if (ids.length > 1) ids.splice(ids.indexOf(this._lastUpgrade), 1);
+    if (ids.some((id) => !defOf(id))) {
+      // Never soft-lock the pick screen on a bad id (stale pool, stale module).
+      this.upgradePool = [...UPGRADE_IDS];
+      this._lastUpgrade = null;
+      return UPGRADES.slice(0, 3);
+    }
+    const last = ids.indexOf(this._lastUpgrade);
+    if (ids.length > 1 && last >= 0) ids.splice(last, 1);
     const picks = [];
     while (picks.length < 3 && ids.length > 0) {
       let total = 0;

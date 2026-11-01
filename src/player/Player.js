@@ -44,6 +44,13 @@ export class Player {
     }
   }
 
+  // Upgrade hook (MEDKIT / RAM PLATING): patch up, HUD included.
+  heal(n) {
+    if (!this.alive) return;
+    this.hp = Math.min(this.maxHp, this.hp + n);
+    this.game.ui.updateHp(this.hp, this.maxHp);
+  }
+
   // Fresh run: clear upgrade-derived stats and restore base health.
   resetRun() {
     this.damageReduction = 0;
