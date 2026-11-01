@@ -177,6 +177,8 @@ src/
   levels/             level1..5.js data modules + index.js registry
 scripts/
   smoke.js            Node logic tests (levels, rails, combos, rng) - no browser
+  world-clearance.js  Builds every level's world in Node and fails if any object
+                      footprint sits on the asphalt
   headless-test.mjs   Headless Chrome CDP integration test of the full game loop
   boss-probe.mjs      Boss-fight aim/damage diagnostic probe
 ```
@@ -185,6 +187,7 @@ scripts/
 
 ```bash
 node scripts/smoke.js            # logic tests (no browser needed)
+node scripts/world-clearance.js  # world clearance: nothing may block the roadway
 node scripts/headless-test.mjs   # full in-browser integration test (needs Chrome)
 node scripts/music-probe.mjs     # drives the music sequencer with a mock AudioContext
 node scripts/spawn-audit.mjs     # reports spawn pacing per level (reaction times, alive peaks)

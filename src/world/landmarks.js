@@ -306,23 +306,38 @@ export function buildSkylineStrip(rng, curve, { side, dist, count, base = '#232a
 // ---------------------------------------------------------------- placement
 
 export function placeLandmarks(ctx) {
-  const { theme, rng, M, curve, roadWidth, riverSide, worldRoot, anims, rememberSolid, hitsSolid, roadCheck } = ctx;
+  const { theme, rng, M, curve, roadWidth, riverSide, worldRoot, anims, rememberSolid, hitsSolid, roadCheck, wallCheck } = ctx;
   const half = roadWidth / 2;
   const landSide = riverSide ? -riverSide : (rng.chance(0.5) ? 1 : -1);
+  // Waterfront side. buildWorld passes riverSide 0 when the level has no river,
+  // and `0 ?? 1` is 0 — which would place waterfront landmarks on the asphalt.
+  const shoreSide = riverSide || -landSide;
 
   const place = (obj, u, side, dist, opts = {}) => {
     const p = new THREE.Vector3(), t = new THREE.Vector3(), right = new THREE.Vector3();
+    let ok = false;
+    // Try nudges along the rail first, then push the footprint outward: sharp
+    // bends swing the road toward the lot line and would wall the street off.
     for (const du of [0, 0.06, -0.06, 0.12, -0.12]) {
+      if (ok) break;
       const uu = Math.min(0.96, Math.max(0.04, u + du));
       curve.getPointAt(uu, p);
       curve.getTangentAt(uu, t);
       right.set(-t.z, 0, t.x).normalize();
-      obj.position.set(p.x - right.x * side * dist, opts.y ?? 0, p.z - right.z * side * dist);
-      obj.rotation.y = opts.alignTangent ? Math.atan2(t.x, t.z) : Math.atan2(p.x - obj.position.x, p.z - obj.position.z);
-      obj.updateMatrixWorld(true);
-      if (!hitsSolid(obj, -2) && !(roadCheck && roadCheck(obj, 0.5))) break;
-      if (du === -0.12) return null; // no clear spot — skip this landmark
+      for (const push of [0, 3, 6, 9, 12]) {
+        const dd = dist + push;
+        obj.position.set(p.x - right.x * side * dd, opts.y ?? 0, p.z - right.z * side * dd);
+        obj.rotation.y = opts.alignTangent ? Math.atan2(t.x, t.z) : Math.atan2(p.x - obj.position.x, p.z - obj.position.z);
+        obj.updateMatrixWorld(true);
+        if (hitsSolid(obj, -2)) continue;
+        if (roadCheck && roadCheck(obj, 0.5)) continue;
+        if (wallCheck && !opts.watercraft && wallCheck(obj, 0.4)) continue;
+        ok = true;
+        break;
+      }
     }
+    if (!ok) return null; // no clear spot — skip this landmark
+    if (opts.watercraft) obj.userData.watercraft = true; // floats beside the road
     worldRoot.add(obj);
     if (!opts.noSolid) rememberSolid(obj);
     if (obj.userData.animate) {
@@ -336,16 +351,16 @@ export function placeLandmarks(ctx) {
 
   switch (theme) {
     case 'city': {
-      sky({ side: riverSide ?? 1, dist: half + 40, count: 22 });
+      sky({ side: shoreSide, dist: half + 40, count: 22 });
       sky({ side: landSide, dist: half + 36, count: 24 });
-      if (riverSide) place(makeRapidsWeir(M), 0.20, riverSide, half + 9, { alignTangent: true });
+      if (riverSide) place(makeRapidsWeir(M), 0.20, riverSide, half + 9, { alignTangent: true, watercraft: true });
       place(makeMuseumOfArt(M), 0.14, landSide, half + 16);
       place(makeReflectingPool(M), 0.14, landSide, half + 7);
       place(makeOlympians(M), 0.155, landSide, half + 10.5);
       place(makeLionFountain(M), 0.40, landSide, half + 6);
       if (riverSide) place(makeGlassCitySign(M), 0.52, riverSide, half + 4);
       if (riverSide) {
-        place(makeFreighter(M), 0.62, riverSide, half + 9, { y: 1.1, alignTangent: true });
+        place(makeFreighter(M), 0.62, riverSide, half + 9, { y: 1.1, alignTangent: true, watercraft: true });
         place(makeHarborCrane(M), 0.70, riverSide, half + 3);
         place(makeHarborCrane(M, 0x3a5a8a), 0.745, riverSide, half + 3);
         place(makeLockHouse(M), 0.82, riverSide, half + 13);
@@ -363,7 +378,7 @@ export function placeLandmarks(ctx) {
       place(makeMudHensField(M), 0.60, -landSide, half + 20);
       if (riverSide) {
         place(makeHarborCrane(M), 0.85, riverSide, half + 3);
-        place(makeFreighter(M), 0.90, riverSide, half + 9, { y: 1.1, alignTangent: true });
+        place(makeFreighter(M), 0.90, riverSide, half + 9, { y: 1.1, alignTangent: true, watercraft: true });
       }
       break;
     }
@@ -374,21 +389,21 @@ export function placeLandmarks(ctx) {
       break;
     }
     case 'fair': {
-      sky({ side: riverSide ?? 1, dist: half + 44, count: 18, litChance: 0.13 });
+      sky({ side: shoreSide, dist: half + 44, count: 18, litChance: 0.13 });
       sky({ side: landSide, dist: half + 64, count: 12, litChance: 0.13 });
       place(makeZooArch(M), 0.10, landSide, half + 7);
       place(makeLionFountain(M), 0.22, landSide, half + 6);
-      place(makeDossinMall(M), 0.42, riverSide ?? 1, half + 28);
+      place(makeDossinMall(M), 0.42, shoreSide, half + 28);
       break;
     }
     case 'industrial': {
       sky({ side: landSide, dist: half + 46, count: 20 });
-      place(makeGlassWorks(M), 0.18, riverSide ?? 1, half + 15);
+      place(makeGlassWorks(M), 0.18, shoreSide, half + 15);
       place(makeGlassWorks(M), 0.58, landSide, half + 15);
       place(makeGlassCitySign(M), 0.36, landSide, half + 5);
       if (riverSide) {
         place(makeHarborCrane(M, 0xd8b83e), 0.75, riverSide, half + 3);
-        place(makeFreighter(M), 0.80, riverSide, half + 9, { y: 1.1, alignTangent: true });
+        place(makeFreighter(M), 0.80, riverSide, half + 9, { y: 1.1, alignTangent: true, watercraft: true });
       }
       break;
     }

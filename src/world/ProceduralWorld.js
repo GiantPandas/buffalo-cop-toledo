@@ -639,44 +639,79 @@ export function buildWorld(scene, curve, levelData, rng) {
     if (margin > 0) _test.expandByScalar(-margin);
     return solidBoxes.some((b) => b.intersectsBox(_test));
   };
-  // ---- Road clearance guard: nothing LOW may intrude into the roadway ----
-  // Overhead structures (crane booms, box max.y > 2.6) are exempt; anything
-  // shorter whose footprint reaches the asphalt is rejected by callers.
+  // ---- Road clearance guard: no footprint may intrude into the roadway ----
+  // Overhead-only structures (box entirely above head height) are exempt via
+  // crossesRoad; buildings and street-level props are checked with wallsRoad.
   const _roadPts = [];
-  for (let i = 0; i <= 64; i++) _roadPts.push(curve.getPointAt(i / 64, new THREE.Vector3()));
+  for (let i = 0; i <= 160; i++) _roadPts.push(curve.getPointAt(i / 160, new THREE.Vector3()));
   const _rc = new THREE.Box3(), _corner = new THREE.Vector3();
-  const crossesRoad = (obj, extra = 0.4) => {
+  // Corner-to-road-polyline distance (XZ). Measuring against the segments, not
+  // just the sample points, keeps a tight bend from hiding asphalt from the guard.
+  const _nearRoad = (pt, reach) => {
+    const r2 = reach * reach;
+    for (let i = 0; i < _roadPts.length - 1; i++) {
+      const a = _roadPts[i], b = _roadPts[i + 1];
+      const abx = b.x - a.x, abz = b.z - a.z;
+      const px = pt.x - a.x, pz = pt.z - a.z;
+      const len2 = abx * abx + abz * abz;
+      const s = len2 > 0 ? Math.max(0, Math.min(1, (px * abx + pz * abz) / len2)) : 0;
+      const dx = px - abx * s, dz = pz - abz * s;
+      if (dx * dx + dz * dz < r2) return true;
+    }
+    return false;
+  };
+  const footprintHitsRoad = (obj, extra) => {
     obj.updateMatrixWorld(true);
     _rc.setFromObject(obj);
-    if (_rc.max.y > 2.6) return false; // pass under, not across
     const reach = roadWidth / 2 + extra;
-    const r2 = reach * reach;
     for (let cx = 0; cx < 2; cx++) {
       for (let cz = 0; cz < 2; cz++) {
         _corner.set(cx ? _rc.max.x : _rc.min.x, 0, cz ? _rc.max.z : _rc.min.z);
-        for (let i = 0; i < _roadPts.length; i++) {
-          if (_corner.distanceToSquared(_roadPts[i]) < r2) return true;
-        }
+        if (_nearRoad(_corner, reach)) return true;
       }
     }
     return false;
   };
+  const crossesRoad = (obj, extra = 0.4) => {
+    obj.updateMatrixWorld(true);
+    _rc.setFromObject(obj);
+    if (_rc.max.y > 2.6) return false; // pass under, not across
+    return footprintHitsRoad(obj, extra);
+  };
+  // Height-blind: a footprint on the asphalt walls the street off no matter how
+  // tall the object is, so buildings, structures and props are checked with this.
+  const wallsRoad = (obj, extra = 0.3) => footprintHitsRoad(obj, extra);
   const p = new THREE.Vector3(), t = new THREE.Vector3(), right = new THREE.Vector3();
+  // Drops obj at (u, side, dist), facing the road, then slides it outward until
+  // it clears the asphalt and everything already placed. false = no spot works.
+  const placeClear = (obj, u, side, dist, opts = {}) => {
+    const { ry = null, margin = 0.3, push = 2.4, tries = 6, solidMargin = 0.3 } = opts;
+    curve.getPointAt(u, p);
+    curve.getTangentAt(u, t);
+    right.set(-t.z, 0, t.x).normalize();
+    const yaw = ry === 'tangent' ? Math.atan2(t.x, t.z) : ry;
+    let dd = dist;
+    for (let i = 0; i <= tries; i++) {
+      obj.position.set(p.x - right.x * side * dd, opts.y ?? 0, p.z - right.z * side * dd);
+      obj.rotation.y = yaw != null ? yaw : Math.atan2(p.x - obj.position.x, p.z - obj.position.z);
+      if (!wallsRoad(obj, margin) && !hitsSolid(obj, solidMargin)) return true;
+      dd += push;
+    }
+    return false;
+  };
 
   // ---- Placed structures (from level data) ----
   for (const s of w.structures || []) {
-    curve.getPointAt(s.u, p);
-    curve.getTangentAt(s.u, t);
-    right.set(-t.z, 0, t.x).normalize();
     const dist = s.dist || (roadWidth / 2 + 12);
-    const x = p.x - right.x * s.side * dist;
-    const z = p.z - right.z * s.side * dist;
     let obj = null, update = null;
     switch (s.type) {
       case 'feedstore': obj = makeFeedStore(rng, M); break;
       case 'gasstation': obj = makeGasStation(rng, M); break;
       case 'carwash': obj = makeCarWash(rng, M); update = (dt) => { for (const k of ['arch0', 'arch1', 'arch2']) if (obj.userData[k]) obj.userData[k].rotation.x += dt * 2; }; break;
       case 'ferriswheel': { const fw = makeFerrisWheel(rng, M); obj = fw.group; update = fw.update; break; }
+      case 'tent': obj = makeTent(rng, M); break;
+      case 'foodstand': obj = makeFoodStand(rng, M); break;
+      case 'carnivalgame': obj = makeCarnivalGame(rng, M); break;
       case 'barn': obj = makeBarn(rng, M); break;
       case 'silo': obj = makeSilo(M); break;
       case 'storefront': obj = makeStorefront(rng, M, s.text || 'GENERAL STORE'); break;
@@ -686,49 +721,32 @@ export function buildWorld(scene, curve, levelData, rng) {
       case 'trafficlight': obj = makeTrafficLight(M); break;
     }
     if (!obj) continue;
-    // Face toward the road unless a custom ry is given; nudge outward if the
-    // footprint would wall off the roadway (curves pull the road sideways).
-    let dd = dist, blocked = false;
-    for (let tries = 0; tries < 4; tries++) {
-      const px = p.x - right.x * s.side * dd;
-      const pz = p.z - right.z * s.side * dd;
-      obj.position.set(px, 0, pz);
-      obj.rotation.y = s.ry != null ? s.ry : Math.atan2(p.x - px, p.z - pz);
-      blocked = crossesRoad(obj, 0.3);
-      if (!blocked) break;
-      dd += 1.6;
-    }
-    if (blocked) continue;
+    // Face toward the road unless a custom ry is given; slide outward if the
+    // footprint would wall off the roadway (sharp bends pull the road sideways).
+    if (!placeClear(obj, s.u, s.side, dist, { ry: s.ry ?? null, margin: 0.3 })) continue;
     worldRoot.add(obj);
     rememberSolid(obj);
     if (update) anims.push(update);
   }
 
   // ---- Toledo landmarks (stylized real Glass City structures) ----
-  placeLandmarks({ theme: w.theme, rng, M, curve, roadWidth, riverSide: w.riverSide || 0, worldRoot, anims, rememberSolid, hitsSolid, roadCheck: crossesRoad });
+  placeLandmarks({ theme: w.theme, rng, M, curve, roadWidth, riverSide: w.riverSide || 0, worldRoot, anims, rememberSolid, hitsSolid, roadCheck: crossesRoad, wallCheck: wallsRoad });
 
   // ---- Buildings along both sides ----
   let bi = 0;
   for (let u = 0.03; u < 0.985; u += 0.042) {
     for (const side of [-1, 1]) {
       if (rng.chance(0.18)) continue; // gaps / lots
-      curve.getPointAt(u, p);
-      curve.getTangentAt(u, t);
-      right.set(-t.z, 0, t.x).normalize();
       const dist = roadWidth / 2 + 3.2 + rng.range(4, 8);
-      const bx = p.x - right.x * side * dist;
-      const bz = p.z - right.z * side * dist;
       const bw = rng.range(8, 14), bd = rng.range(7, 11);
       const bh = (w.theme === 'downtown' ? rng.int(3, 6) : rng.int(2, 3)) * 4.2;
       const tex = (w.theme === 'downtown' && rng.chance(0.45))
         ? glassFacades[bi++ % glassFacades.length]
         : facades[bi++ % facades.length];
       const b = makeBuilding(rng, M, tex, bw, bd, bh);
-      // Face facade (+z) toward the road center.
-      const fx = p.x - bx, fz = p.z - bz;
-      b.rotation.y = Math.atan2(fx, fz);
-      b.position.set(bx, 0, bz);
-      if (hitsSolid(b, 0.6)) continue; // never build on top of a structure or neighbor
+      // Facade (+z) faces the road; slide out until the lot clears the asphalt,
+      // never build on top of a structure or neighbor.
+      if (!placeClear(b, u, side, dist, { margin: 0.4, solidMargin: 0.6 })) continue;
       worldRoot.add(b);
       rememberSolid(b);
     }
@@ -744,11 +762,11 @@ export function buildWorld(scene, curve, levelData, rng) {
     const sl = makeStreetlight(M);
     sl.position.set(p.x - right.x * side * d, 0, p.z - right.z * side * d);
     sl.rotation.y = Math.atan2(right.x * side, right.z * side);
-    if (!hitsSolid(sl, 0.3)) worldRoot.add(sl);
+    if (!hitsSolid(sl, 0.3) && !wallsRoad(sl, 0)) worldRoot.add(sl);
     if (rng.chance(0.3)) {
       const up = makeUtilityPole(M);
       up.position.set(p.x + right.x * side * d, 0, p.z + right.z * side * d);
-      if (!hitsSolid(up, 0.3)) worldRoot.add(up);
+      if (!hitsSolid(up, 0.3) && !wallsRoad(up, 0)) worldRoot.add(up);
     }
   }
 
@@ -800,15 +818,11 @@ export function buildWorld(scene, curve, levelData, rng) {
     // Park trees on one side
     for (let u = 0.1; u < 0.9; u += 0.08) {
       if (rng.chance(0.4)) continue;
-      curve.getPointAt(u, p);
-      curve.getTangentAt(u, t);
-      right.set(-t.z, 0, t.x).normalize();
       // City: keep trees on the dry side of the river.
       const side = w.theme === 'city' && w.riverSide ? -w.riverSide : rng.sign();
       const d = roadWidth / 2 + (w.riverSide === side ? 14 : 5) + rng.range(0, 3);
       const tree = makeTree(rng, M);
-      tree.position.set(p.x - right.x * side * d, 0, p.z - right.z * side * d);
-      if (!hitsSolid(tree, 0.4)) worldRoot.add(tree);
+      if (placeClear(tree, u, side, d, { ry: 0, margin: 0.4, solidMargin: 0.4 })) worldRoot.add(tree);
     }
     if (w.theme === 'city' && w.riverSide) {
       // Bridge spans the river: deck crosses the road direction (narrow along
@@ -834,32 +848,22 @@ export function buildWorld(scene, curve, levelData, rng) {
   if (w.theme === 'farm') {
     // Fences, hay bales, fields on both sides
     for (let u = 0.06; u < 0.95; u += 0.12) {
-      curve.getPointAt(u, p);
-      curve.getTangentAt(u, t);
-      right.set(-t.z, 0, t.x).normalize();
       for (const side of [-1, 1]) {
         if (rng.chance(0.3)) continue;
         const d = roadWidth / 2 + 6;
         const f = makeFence(rng.range(10, 18), M);
-        f.position.set(p.x - right.x * side * d, 0, p.z - right.z * side * d);
-        f.rotation.y = Math.atan2(t.x, t.z);
-        if (!hitsSolid(f, 0.3)) worldRoot.add(f);
+        if (placeClear(f, u, side, d, { ry: 'tangent', margin: 0.4, solidMargin: 0.3 })) worldRoot.add(f);
         const hb = makeHayBale(M);
-        hb.position.set(p.x - right.x * side * (d + 3), 0, p.z - right.z * side * (d + 3));
-        if (!hitsSolid(hb, 0.2)) worldRoot.add(hb);
+        if (placeClear(hb, u, side, d + 3, { ry: 0, margin: 0.4, solidMargin: 0.2 })) worldRoot.add(hb);
       }
     }
     // Scattered trees
     for (let i = 0; i < 14; i++) {
       const u = rng.range(0.05, 0.95);
-      curve.getPointAt(u, p);
-      curve.getTangentAt(u, t);
-      right.set(-t.z, 0, t.x).normalize();
       const side = rng.sign();
       const d = roadWidth / 2 + rng.range(12, 30);
       const tree = makeTree(rng, M);
-      tree.position.set(p.x - right.x * side * d, 0, p.z - right.z * side * d);
-      if (!hitsSolid(tree, 0.4)) worldRoot.add(tree);
+      if (placeClear(tree, u, side, d, { ry: 0, margin: 0.4, solidMargin: 0.4 })) worldRoot.add(tree);
     }
   }
 
@@ -867,30 +871,21 @@ export function buildWorld(scene, curve, levelData, rng) {
     // Dirt parking + tents/stands scattered wide
     for (let i = 0; i < 10; i++) {
       const u = rng.range(0.08, 0.92);
-      curve.getPointAt(u, p);
-      curve.getTangentAt(u, t);
-      right.set(-t.z, 0, t.x).normalize();
       const side = rng.sign();
       const d = roadWidth / 2 + rng.range(10, 26);
       const thing = rng.pick(['tent', 'food', 'game', 'balloon']);
       if (thing === 'tent') {
         const tnt = makeTent(rng, M);
-        tnt.position.set(p.x - right.x * side * d, 0, p.z - right.z * side * d);
-        if (!hitsSolid(tnt, 0.4)) worldRoot.add(tnt);
+        if (placeClear(tnt, u, side, d, { margin: 0.4, solidMargin: 0.4 })) worldRoot.add(tnt);
       } else if (thing === 'food') {
         const fs = makeFoodStand(rng, M);
-        fs.position.set(p.x - right.x * side * d, 0, p.z - right.z * side * d);
-        fs.rotation.y = Math.atan2(right.x * side, right.z * side);
-        if (!hitsSolid(fs, 0.4)) worldRoot.add(fs);
+        if (placeClear(fs, u, side, d, { margin: 0.4, solidMargin: 0.4 })) worldRoot.add(fs);
       } else if (thing === 'game') {
         const cg = makeCarnivalGame(rng, M);
-        cg.position.set(p.x - right.x * side * d, 0, p.z - right.z * side * d);
-        cg.rotation.y = Math.atan2(right.x * side, right.z * side);
-        if (!hitsSolid(cg, 0.4)) worldRoot.add(cg);
+        if (placeClear(cg, u, side, d, { margin: 0.4, solidMargin: 0.4 })) worldRoot.add(cg);
       } else {
         const bc = makeBalloonCluster(rng, M);
-        bc.group.position.set(p.x - right.x * side * (d + 2), 0, p.z - right.z * side * (d + 2));
-        if (!hitsSolid(bc.group, 0.2)) {
+        if (placeClear(bc.group, u, side, d + 2, { ry: 0, margin: 0.4, solidMargin: 0.2 })) {
           worldRoot.add(bc.group);
           anims.push((dt, time) => bc.update(time));
         }
@@ -899,41 +894,28 @@ export function buildWorld(scene, curve, levelData, rng) {
     // Animal pens
     for (let i = 0; i < 4; i++) {
       const u = rng.range(0.15, 0.85);
-      curve.getPointAt(u, p);
-      curve.getTangentAt(u, t);
-      right.set(-t.z, 0, t.x).normalize();
       const side = rng.sign();
       const d = roadWidth / 2 + rng.range(14, 22);
       const pen = makePen(M);
-      pen.position.set(p.x - right.x * side * d, 0, p.z - right.z * side * d);
-      pen.rotation.y = Math.atan2(t.x, t.z);
-      if (!hitsSolid(pen, 0.4)) worldRoot.add(pen);
+      if (placeClear(pen, u, side, d, { ry: 'tangent', margin: 0.4, solidMargin: 0.4 })) worldRoot.add(pen);
     }
   }
 
   if (w.theme === 'industrial') {
     for (let i = 0; i < 6; i++) {
       const u = rng.range(0.1, 0.9);
-      curve.getPointAt(u, p);
-      curve.getTangentAt(u, t);
-      right.set(-t.z, 0, t.x).normalize();
       const side = rng.sign();
       const d = roadWidth / 2 + rng.range(12, 24);
       const thing = rng.pick(['tank', 'storage', 'drainage']);
       if (thing === 'tank') {
         const tk = makeWaterTank(M);
-        tk.position.set(p.x - right.x * side * d, 0, p.z - right.z * side * d);
-        if (!hitsSolid(tk, 0.4)) worldRoot.add(tk);
+        if (placeClear(tk, u, side, d, { ry: 0, margin: 0.4, solidMargin: 0.4 })) worldRoot.add(tk);
       } else if (thing === 'storage') {
         const sb = makeStorageBuilding(M);
-        sb.position.set(p.x - right.x * side * d, 0, p.z - right.z * side * d);
-        sb.rotation.y = Math.atan2(t.x, t.z);
-        if (!hitsSolid(sb, 0.4)) worldRoot.add(sb);
+        if (placeClear(sb, u, side, d, { ry: 'tangent', margin: 0.4, solidMargin: 0.4 })) worldRoot.add(sb);
       } else {
         const dr = makeDrainageChannel(M);
-        dr.position.set(p.x - right.x * side * (d + 4), 0, p.z - right.z * side * (d + 4));
-        dr.rotation.y = Math.atan2(t.x, t.z);
-        if (!hitsSolid(dr, 0.3)) worldRoot.add(dr);
+        if (placeClear(dr, u, side, d + 4, { ry: 'tangent', margin: 0.3, solidMargin: 0.3 })) worldRoot.add(dr);
       }
     }
   }
