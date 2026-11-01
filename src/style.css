@@ -134,17 +134,20 @@ html, body {
 
 /* ---------- ANNOUNCER / BIG TEXT ---------- */
 #announce {
-  position: fixed; top: 26%; left: 50%; transform: translateX(-50%);
+  position: fixed; top: 24%; left: 50%; transform: translateX(-50%);
   z-index: 30; pointer-events: none;
-  font-size: 44px; font-weight: bold; letter-spacing: 6px; color: #fff;
+  font-size: 40px; font-weight: bold; letter-spacing: 5px; color: #fff;
   text-shadow: 0 0 18px rgba(255,200,60,0.9), 3px 3px 0 #7a3b00;
+  background: rgba(10,12,18,0.66); padding: 14px 30px;
+  border: 1px solid rgba(255,190,70,0.35); border-radius: 6px;
+  max-width: 86vw; text-align: center;
+  transition: opacity 0.5s ease;
 }
-#announce.show { animation: announce-pop 1.1s ease-out forwards; }
-@keyframes announce-pop {
-  0% { opacity: 0; transform: translateX(-50%) scale(2.4); }
-  18% { opacity: 1; transform: translateX(-50%) scale(1); }
-  80% { opacity: 1; }
-  100% { opacity: 0; transform: translateX(-50%) scale(0.92); }
+#announce.show { animation: announce-in 0.45s cubic-bezier(0.2, 1.4, 0.4, 1); }
+#announce.fading { opacity: 0; }
+@keyframes announce-in {
+  0% { opacity: 0; transform: translateX(-50%) scale(1.9); }
+  100% { opacity: 1; transform: translateX(-50%) scale(1); }
 }
 
 #bigtext {

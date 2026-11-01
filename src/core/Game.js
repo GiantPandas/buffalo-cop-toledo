@@ -32,6 +32,7 @@ export class Game {
     this.stats = { killed: 0, damageTaken: 0 };
     this.railFwd = new THREE.Vector3(0, 0, -1);
     this._announceLast = 0;
+    this._announcePending = null;
     // Bullet time ("Last of the Herd"): slowed world while the trigger stays real-speed.
     this.timeScale = 1;
     this.focus = { active: false, timer: 0, lastAt: -999 };
@@ -256,6 +257,7 @@ export class Game {
     this.player.weapon.ammo = this.player.weapon.magSize; // respects EXTENDED MAG upgrade
     this.player.weapon.reloading = false;
     this.stats = { killed: 0, damageTaken: 0 };
+    this._announcePending = null; // no stale shout leaks into the new level
     this.levelManager.load(idx);
     this.ui.updateHp(this.player.maxHp, this.player.maxHp);
     this.ui.updateScore(this.score.score);
@@ -408,12 +410,17 @@ export class Game {
 
   // ---------------- Per-frame callbacks (from systems) ----------------
   announce(text) {
-    if (this.time - this._announceLast < 2.2) return;
+    if (this.time - this._announceLast < 1.6) {
+      // Don't drop it — queue the latest line for when the announcer is free.
+      this._announcePending = text;
+      return;
+    }
     this.announceForce(text);
   }
 
   // Unthrottled: for moments that must not be skipped.
   announceForce(text) {
+    this._announcePending = null;
     this._announceLast = this.time;
     this.ui.announce(text);
     this.audio.warning();
@@ -685,6 +692,9 @@ export class Game {
       }
 
       this.levelManager.update(sdt, this.time);
+      if (this._announcePending && this.time - this._announceLast >= 1.6) {
+        this.announceForce(this._announcePending);
+      }
       if (this.player.alive && this.levelManager.frozen <= 0) this.player.update(dt);
 
       // Camera follows the rail (or holds during boss).

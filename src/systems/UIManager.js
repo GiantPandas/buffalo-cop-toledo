@@ -165,14 +165,18 @@ export class UIManager {
     const a = this.el.announce;
     a.textContent = text;
     a.classList.remove('hidden');
+    a.classList.remove('fading');
     a.classList.remove('show');
     void a.offsetWidth;
     a.classList.add('show');
     clearTimeout(this._announceT);
-    this._announceT = setTimeout(() => {
+    clearTimeout(this._announceFadeT);
+    // Hold long enough to actually read a full Toledo travel-brochure line.
+    this._announceT = setTimeout(() => a.classList.add('fading'), 2600);
+    this._announceFadeT = setTimeout(() => {
       a.classList.add('hidden');
-      a.classList.remove('show');
-    }, 1150);
+      a.classList.remove('show', 'fading');
+    }, 3150);
   }
 
   showBigText(text, seconds) {
