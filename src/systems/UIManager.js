@@ -1,5 +1,6 @@
 import { pad, fmt } from '../utils/mathx.js';
 import { CONFIG } from '../config.js';
+import { PART_BY_ID, synergiesFor } from '../systems/upgrades.js';
 
 // All DOM-based UI: menus, HUD, announcer, results, high scores, options.
 export class UIManager {
@@ -228,7 +229,8 @@ export class UIManager {
     if (this._floatCount > 48) return; // don't flood the screen
     this._floatCount++;
     const el = document.createElement('span');
-    el.className = 'dmg-float' + (opts.crit ? ' crit' : '') + (opts.head ? ' head' : '');
+    el.className = 'dmg-float' + (opts.crit ? ' crit' : '') + (opts.head ? ' head' : '') +
+      (opts.pierce ? ' pierce' : '');
     el.textContent = String(amount);
     // Slight jitter so overlapping hits don't stack in the same pixel.
     el.style.left = `${x + (Math.random() - 0.5) * 14}px`;
@@ -240,7 +242,7 @@ export class UIManager {
     setTimeout(kill, 950); // safety net if animationend is skipped
   }
 
-  // ---------- Upgrade pick (roguelike) ----------
+  // ---------- Weapon part pick (roguelike) ----------
   setMagSize(count) {
     this._magSize = count;
     this._lastAmmo = -1; // force a HUD refresh next frame
@@ -251,17 +253,50 @@ export class UIManager {
   showUpgrades(options, title) {
     const t = document.getElementById('upg-title');
     if (t) t.textContent = title || 'CHOOSE YOUR NEXT EDGE';
+    const owned = this.game.build || [];
+    const notes = this.game.buildNotes || [];
+
+    // Loadout header: what is already bolted on, and which synergies are live.
+    const load = document.getElementById('upg-loadout');
+    if (load) {
+      if (owned.length === 0) {
+        load.classList.add('hidden');
+        load.innerHTML = '';
+      } else {
+        const chips = owned.map((id) => {
+          const p = PART_BY_ID[id];
+          return `<span class="lc-chip r-${p.rarity}">${p.icon} ${p.name}</span>`;
+        }).join('');
+        const live = notes.length
+          ? `<div class="lc-row"><span class="lc-head">ACTIVE</span>` +
+            notes.map((n) => `<span class="lc-syn ${n.kind}" title="${n.desc}">${n.label}</span>`).join('') +
+            `</div>`
+          : '';
+        load.innerHTML = `<div class="lc-row"><span class="lc-head">ON THE GUN</span>${chips}</div>${live}`;
+        load.classList.remove('hidden');
+      }
+    }
+
     const grid = document.getElementById('upgrade-grid');
     grid.innerHTML = '';
     options.forEach((u, i) => {
       const card = document.createElement('button');
       card.className = `upg-card r-${u.rarity}`;
+      // Synergy lines first, so a pick that completes a pair or set reads instantly.
+      const syn = synergiesFor(u.id, owned);
+      const live = syn.filter((s) => s.live);
+      const hints = syn.filter((s) => !s.live).slice(0, 2);
+      const lines = [
+        ...live.map((s) => `<div class="uc-syn live">⚡ ${s.label} — ${s.desc}</div>`),
+        ...hints.map((s) => `<div class="uc-syn">↳ with ${s.partner}: ${s.label}</div>`)
+      ].join('');
       card.innerHTML = `
         <div class="uc-icon">${u.icon}</div>
         <div class="uc-body">
-          <div class="uc-rarity">${u.rarity}</div>
+          <div class="uc-rarity">${u.rarity} / ${u.tags.join(' · ')}</div>
           <div class="uc-name">${u.name}</div>
           <div class="uc-desc">${u.desc}</div>
+          ${lines}
           <div class="uc-flavor">${u.flavor}</div>
         </div>`;
       card.style.animationDelay = `${i * 0.14}s`;

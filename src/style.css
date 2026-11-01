@@ -189,6 +189,7 @@ html, body {
 }
 .dmg-float.head { color: #9ff3ff; text-shadow: 0 0 8px rgba(120,240,255,0.9), 0 2px 0 #0a3a66; }
 .dmg-float.crit { font-size: 27px; color: #ffd23e; text-shadow: 0 0 12px rgba(255,180,0,0.95), 2px 2px 0 #6b3b00; }
+.dmg-float.pierce { font-size: 20px; color: #9ff3b4; text-shadow: 0 0 10px rgba(90,220,140,0.9), 0 2px 0 #0a4a2a; }
 @keyframes dmg-float-up {
   from { opacity: 1; transform: translate(-50%, -100%); }
   to   { opacity: 0; transform: translate(-50%, calc(-100% - 64px)); }
@@ -307,12 +308,38 @@ html, body {
 .upg-card .uc-rarity { font-size: 10px; letter-spacing: 4px; color: var(--rc, #ffd23e); opacity: 0.85; }
 .upg-card .uc-name { font-size: 18px; letter-spacing: 3px; font-weight: bold; color: #ffe9a0; text-shadow: 0 0 8px rgba(255,210,62,0.6); }
 .upg-card .uc-desc { font-size: 13px; letter-spacing: 1px; color: #7fd4ff; margin-top: 4px; }
+.upg-card .uc-syn { font-size: 11px; letter-spacing: 1px; color: #7d94ab; margin-top: 5px; }
+.upg-card .uc-syn.live {
+  color: #9ff3b4; text-shadow: 0 0 8px rgba(90,220,140,0.5);
+  border-left: 2px solid rgba(159,243,180,0.6); padding-left: 7px;
+}
+.upg-card:hover .uc-syn.live { color: #d8ffe6; }
 .upg-card .uc-flavor { font-size: 11px; font-style: italic; color: #8ba3bd; margin-top: 6px; }
 .upg-card.r-common { --rc: #8fb8dd; --rg: rgba(140,190,230,0.55); }
 .upg-card.r-rare { --rc: #46c8ff; --rg: rgba(70,200,255,0.7); }
 .upg-card.r-epic { --rc: #ffd23e; --rg: rgba(255,210,62,0.9); box-shadow: 0 0 14px rgba(255,210,62,0.35); }
 .upg-card.r-epic .uc-name { color: #fff3c4; }
 @keyframes upg-in { from { opacity: 0; transform: translateY(14px) scale(0.97); } to { opacity: 1; transform: none; } }
+
+/* Current loadout + live synergies, above the pick cards */
+#upg-loadout { width: 470px; margin: -6px 0 18px; }
+#upg-loadout .lc-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 7px; }
+#upg-loadout .lc-head {
+  font-size: 10px; letter-spacing: 3px; color: #6f8ba5;
+  border-bottom: 1px dashed rgba(127,212,255,0.3); padding-bottom: 2px; margin-right: 4px;
+}
+#upg-loadout .lc-chip {
+  font-size: 11px; letter-spacing: 1px; color: #cfeaff;
+  background: rgba(20,45,80,0.7); border: 1px solid var(--rc, #8fb8dd); padding: 2px 8px;
+}
+#upg-loadout .lc-chip.r-rare { --rc: #46c8ff; }
+#upg-loadout .lc-chip.r-epic { --rc: #ffd23e; color: #fff3c4; }
+#upg-loadout .lc-syn {
+  font-size: 11px; letter-spacing: 2px; color: #0d2417; font-weight: bold;
+  background: #9ff3b4; border: 1px solid #d8ffe6; padding: 2px 8px;
+  box-shadow: 0 0 10px rgba(90,220,140,0.5);
+}
+#upg-loadout .lc-syn.set { background: #ffd98a; border-color: #fff3c4; box-shadow: 0 0 10px rgba(255,200,90,0.55); }
 
 /* Game over / victory */
 .go-title { font-size: 46px; letter-spacing: 6px; color: #ff5252; text-shadow: 0 0 20px rgba(255,60,60,0.8); }

@@ -62,24 +62,18 @@ comes down the road.
 - **STREET FIDELITY** — roads wear tar patches, cracks, manholes and faded paint; sidewalks are mismatched slabs with cracks and tree pits; buildings get storefront ground floors, cornices, setback upper floors, water tanks/AC units, varied palettes, and downtown rises as lit glass towers. Hydrants and trash cans line the sidewalks. The view-model **TPD-9** cycles its pump on every shot, drops/ejects its mag on reload, and shows a status light (cyan ready / amber low / red empty). Textures: `src/world/textures.js`; gun: `src/player/Weapon.js`.
 - **MUSIC** — a 4-bar lookahead sequencer per intensity track (menu/explore/encounter/herd/boss/victory/gameover): chord pads walk a progression, bass and lead get distinct per-bar variations with fills, humanized drums (ghost hats, velocity jitter, open hats, tom fills, crash on phrase tops) and an echo bus under the lead. Logic: `TRACKS` + `_playStep` in `src/core/AudioManager.js`.
 
-## Upgrades (roguelike)
+## Weapon parts (roguelike build)
 
-After clearing each mission (except the final boss), pick **one** weapon upgrade that stays for the rest of the run. Three are offered at random from a pool of 12:
+Every run starts by choosing a **loadout**, then you pick **one part** after each cleared mission (4 picks across the run). Cards are drawn from a pool of **20 parts** in three rarity tiers — common (precinct issue), rare (field modifications), epic (the legends) — and every part carries a tag: `feed`, `sight`, `rounds`, `rate`, `tac`, `med`, `bounty`. Most parts modify the gun itself: drum size, fire rate, reload behaviour, damage, pierce, crit, bloom, precision hits.
 
-- OVERCLOCKED TRIGGER — +25% fire rate
-- HEAVY CALIBER — +1 damage per shot
-- EXTENDED MAG — +2 mag size (tops off)
-- QUICK SWAP — -20% reload time
-- STABILIZER — less camera kick
-- LUCKY ROUNDS — +8% crit chance (crits deal 2x, with their own "ting")
-- HOLLOW POINTS — bullets pierce +1 buffalo
-- SNIPER GLASS — +3 damage on headshots
-- REINFORCED VEST — -20% damage from charges (max 75%)
-- CERAMIC PLATING — -3 damage per hit taken
-- FIELD MEDIC — +20 max HP, full heal now
-- CASH FOR BUFFALO — kills & hits pay +25% more
+The pick screen shows your current loadout, the synergies already active, and what each card would light up:
 
-Upgrades live in `src/systems/upgrades.js` and mutate the live `Weapon` instance (`src/player/Weapon.js`). They reset on a fresh run from the menu but persist through retries within a run.
+- **Pairs (17)** — two named parts upgrade each other. DRUM MAG + SPEED LOADER = **LOGISTICS BEAT** (+8 rounds, reload 15% faster again). HAIR TRIGGER + TRIGGER FINGER = **SUSTAINED SUPERIORITY**. HOLLOW POINTS + SPLIT-TIP LOAD = **OVERMATCH** (double pierce, and every pierced buffalo pays $125). TIME CRIME + FLASH STEER = **CROWD CONTROL**. CASE CATCH + LAST SHELL STANCE = **NEVER EMPTY**.
+- **Sets (6)** — enough parts sharing a tag changes the gun's character, sometimes at a price: 2 `rate` parts = **SUPPRESSION CERTIFIED** (+10% fire rate, but bloom builds 12% faster); 3 `feed` parts = **QUARTERMASTER**; 2 `sight` parts = **MARKSMAN LIST**; 2 `tac` parts = **FIELD COMMAND**.
+- **Play-style parts** — CASE CATCH tops off a mostly-full drum with a fast tactical reload, LAST SHELL STANCE doubles the last rounds in the drum (the gun's status strip glows gold), TOLEDO HEAT pays out on combo tiers, TIME CRIME keeps the trigger at real speed in bullet time, GRANT MONEY scales the per-kill bounty with your combo.
+- **Draft bias** — a part that would complete a live pair or set right now is nearly twice as likely to be offered, and the last pick is never re-offered.
+
+Parts are declarative: `resolveBuild(ownedIds)` recomputes the whole gun from the owned set (`src/systems/upgrades.js`), so picks are order-independent, picking a part twice changes nothing, and each synergy applies exactly once. `applyBuild()` then writes the derived stats onto the live `Weapon` (`src/player/Weapon.js`), the player's armor, and `ScoreManager.bonusMul`, with per-stat caps so a maxed build can't break the game. One-shot effects (MEDKIT heal) run at pick time only. They reset on a fresh run from the menu but persist through retries within a run.
 
 Hit feedback: buffaloes flinch on every hit — a quick whole-body squash, head jerk, leg scramble and tail snap, plus a dazed head wobble while staggered (see `src/enemies/Buffalo.js` `_animate`). The boss takes a bigger flinch, larger on head shots.
 
@@ -169,8 +163,9 @@ src/
   core/Game.js        State machine + main tick loop + event callbacks
   core/InputManager.js / AudioManager.js / SaveManager.js / ScoreManager.js
   systems/            RailSystem, CameraController, ParticleManager,
-                      EnemyManager, LevelManager, UIManager, upgrades.js
-  player/             Player (hp/damage), Weapon (fire/reload/raycast + upgrade stats)
+                      EnemyManager, LevelManager, UIManager,
+                      upgrades.js (weapon parts, pairs, sets, build resolver)
+  player/             Player (hp/damage), Weapon (fire/reload/raycast + build stats)
   enemies/            Buffalo, BossBuffalo, NPC
   world/              ProceduralWorld + procedural textures/geometry/buffalo model
                       + landmarks.js (stylized real Toledo structures)
