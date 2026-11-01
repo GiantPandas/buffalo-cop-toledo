@@ -475,6 +475,108 @@ function makeDrainageChannel(M) {
   return g;
 }
 
+// ================= DEAD-END FINALE =================
+// Every ride ends at a lit last-stand plaza, not a dead street into empty
+// fields: paved apron, police barricade with blinking beacons, floodlights,
+// a final sign, and a themed skyline closing the horizon.
+function buildEndcap({ w, rng, M, curve, roadWidth, worldRoot, anims, facades }) {
+  const end = curve.getPointAt(1, new THREE.Vector3());
+  const tan = curve.getTangentAt(1, new THREE.Vector3());
+  tan.y = 0; tan.normalize();
+  const right = new THREE.Vector3(-tan.z, 0, tan.x);
+  const yaw = Math.atan2(tan.x, tan.z);
+  const at = (along, lat) => new THREE.Vector3(
+    end.x + tan.x * along + right.x * lat, 0, end.z + tan.z * along + right.z * lat);
+  const faceBack = (obj, along, lat) => {
+    const q = at(along, lat);
+    obj.rotation.y = Math.atan2(end.x - q.x, end.z - q.z);
+  };
+  const theme = w.theme;
+
+  // Paved/dirt apron so the road terminates on a lot, not on grass.
+  const apron = addBox(worldRoot, roadWidth + 20, 0.1, 36, 0, 0, 0,
+    (theme === 'farm' || theme === 'fair') ? M.dirt : M.concreteTex);
+  apron.position.copy(at(17, 0)); apron.position.y = 0.03; apron.rotation.y = yaw;
+
+  // Police barricade across the road — the finale herd storms through it.
+  const barrierMat = new THREE.MeshLambertMaterial(
+    { map: makeStripeTexture('#d8b83e', '#1c2733'), flatShading: true });
+  for (const s of [-1, 1]) {
+    const rail = addBox(worldRoot, roadWidth * 0.52, 0.34, 0.3, 0, 1.0, 0, barrierMat);
+    rail.position.copy(at(7, s * roadWidth * 0.25)); rail.rotation.y = yaw + Math.PI / 2;
+    const post = addBox(worldRoot, 0.18, 1.2, 0.18, 0, 0.6, 0, M.darkMetal);
+    post.position.copy(at(7, s * roadWidth * 0.53)); post.rotation.y = yaw;
+    const beaconMat = new THREE.MeshLambertMaterial({ color: 0xffc23e, emissive: 0xd88a10 });
+    const beacon = addBox(worldRoot, 0.28, 0.24, 0.28, 0, 1.32, 0, beaconMat);
+    beacon.position.copy(at(7, s * roadWidth * 0.53)); beacon.rotation.y = yaw;
+    anims.push((dt, time) => { beaconMat.emissiveIntensity = 0.5 + 0.7 * Math.sin(time * 5 + s * 2.4); });
+  }
+
+  // Floodlights on the plaza corners — the finale is lit like a shooting range.
+  for (const s of [-1, 1]) {
+    const foot = at(13, s * (roadWidth / 2 + 9));
+    addBox(worldRoot, 0.35, 0.5, 0.35, 0, 0.25, 0, M.darkMetal).position.copy(foot);
+    addBox(worldRoot, 0.3, 9, 0.3, 0, 4.75, 0, M.darkMetal).position.copy(foot);
+    const headMat = new THREE.MeshLambertMaterial({ color: 0xfff2c8, emissive: 0xffb84a });
+    const head = addBox(worldRoot, 1.7, 0.85, 1.0, 0, 9.1, 0, headMat);
+    head.position.copy(foot);
+    faceBack(head, 13, s * (roadWidth / 2 + 9));
+    anims.push((dt, time) => { headMat.emissiveIntensity = 0.85 + 0.12 * Math.sin(time * 2.2 + s); });
+  }
+
+  // The sign at the end of the world.
+  const sign = makeJokeSign('DEAD END', 'THE BUFFALO ALL CAME THIS WAY', M, 5);
+  sign.position.copy(at(11, 0));
+  faceBack(sign, 11, 0);
+  worldRoot.add(sign);
+
+  // ---- Themed skyline: the horizon past the plaza is never empty ----
+  const place = (obj, along, lat, ry = true) => {
+    obj.position.copy(at(along, lat));
+    if (ry) faceBack(obj, along, lat);
+    worldRoot.add(obj);
+  };
+  if (theme === 'city' || theme === 'downtown') {
+    for (let i = 0; i < 6; i++) {
+      const h = rng.range(theme === 'downtown' ? 12 : 8, theme === 'downtown' ? 26 : 17);
+      place(makeBuilding(rng, M, facades[i % facades.length], rng.range(9, 15), rng.range(8, 12), h),
+        rng.range(24, 40), (i % 2 ? 1 : -1) * rng.range(8, 30));
+    }
+    place(makeWaterTank(M), 30, rng.sign() * rng.range(16, 28));
+  } else if (theme === 'farm') {
+    place(makeBarn(rng, M), 26, -rng.range(10, 20));
+    place(makeBarn(rng, M), 35, rng.range(12, 24));
+    place(makeSilo(M), 24, rng.range(8, 14));
+    place(makeSilo(M), 31, -rng.range(14, 22));
+    for (let i = 0; i < 5; i++) {
+      const bale = makeHayBale(M);
+      place(bale, rng.range(14, 24), rng.sign() * rng.range(6, 18), false);
+      bale.rotation.y = rng.range(0, Math.PI);
+    }
+  } else if (theme === 'fair') {
+    const fw = makeFerrisWheel(rng, M);
+    place(fw.group, 36, rng.sign() * rng.range(10, 22));
+    anims.push(fw.update);
+    for (let i = 0; i < 3; i++) place(makeTent(rng, M), rng.range(22, 33), rng.sign() * rng.range(8, 24));
+    place(makeFoodStand(rng, M), 20, rng.sign() * rng.range(7, 12));
+    const bc = makeBalloonCluster(rng, M);
+    place(bc.group, 16, rng.sign() * rng.range(6, 10), false);
+    anims.push((dt, time) => bc.update(time));
+  } else { // industrial
+    place(makeStorageBuilding(M), 28, -rng.range(8, 16));
+    place(makeStorageBuilding(M), 36, rng.range(10, 22));
+    place(makeWaterTank(M), 24, rng.range(8, 16));
+    place(makeWaterTank(M), 33, -rng.range(14, 24));
+    for (let i = 0; i < 3; i++) { // Libbey-style smokestacks
+      const stack = new THREE.Group();
+      const hh = rng.range(16, 26);
+      addCyl(stack, 1.0, 1.5, hh, 0, hh / 2, 0, M.brickDark, 8);
+      addCyl(stack, 1.2, 1.2, 0.9, 0, hh, 0, M.metal, 8);
+      place(stack, rng.range(30, 44), rng.sign() * rng.range(12, 30));
+    }
+  }
+}
+
 // ================= MAIN WORLD BUILD =================
 /**
  * levelData.world = {
@@ -835,6 +937,9 @@ export function buildWorld(scene, curve, levelData, rng) {
       }
     }
   }
+
+  // ---- The dead-end finale: a lit last-stand plaza past the terminus ----
+  buildEndcap({ w, rng, M, curve, roadWidth, worldRoot, anims, facades });
 
   return { root: worldRoot, anims, solidBoxes };
 }

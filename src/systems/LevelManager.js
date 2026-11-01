@@ -220,12 +220,21 @@ export class LevelManager {
     const items = [];
     for (const e of data.events || []) items.push({ ...e, kind: 'event' });
     for (const e of data.encounters || []) items.push({ ...e, kind: 'encounter' });
+    // Finale injection: non-boss rides end with a last stand at the dead-end
+    // plaza — a stampede storms in across the apron, through the barricade.
+    if (!data.boss) {
+      const ft = Math.max(12, (data.duration || 60) - 7);
+      items.push({ time: ft, type: 'bigtext', text: 'NOWHERE LEFT TO RUN.', freeze: 1.2, kind: 'event' });
+      items.push({ time: ft + 1.6, type: 'stampede', count: 4 + levelIndex, ahead: 0, kind: 'encounter' });
+    }
     items.sort((a, b) => a.time - b.time);
     this.events = items;
     this.eventIndex = 0;
     this.time = 0;
     this.frozen = 0;
     this.endTimer = 0;
+    this._lastStand = false;
+    this._roadClear = false;
 
     // Place NPCs.
     for (const n of data.npcs || []) {
@@ -326,6 +335,19 @@ export class LevelManager {
     return this.roadPointAt(clamp(this.rail.easedProgress() + ahead / len, 0, 1), lateral);
   }
 
+  // Point past the rail terminus — the dead-end plaza, along the exit tangent.
+  beyondPoint(along, lateral = 0) {
+    const end = this.rail.sampleAt(1, new THREE.Vector3());
+    const tan = this.rail.tangentAt(1, new THREE.Vector3());
+    tan.y = 0; tan.normalize();
+    const right = new THREE.Vector3(-tan.z, 0, tan.x);
+    const p = end.clone()
+      .addScaledVector(tan, along)
+      .addScaledVector(right, clamp(lateral, -this._maxLateral(), this._maxLateral()));
+    p.y = 0;
+    return p;
+  }
+
   freeze(seconds) { this.frozen = Math.max(this.frozen, seconds); }
 
   update(dt, time) {
@@ -394,9 +416,22 @@ export class LevelManager {
     if (this.rail.finished) {
       if (this.levelData.boss) {
         if (!this.bossActive) this._startBoss();
+      } else if (this._roadClear) {
+        game.completeLevel();
       } else {
+        // Last stand: the rail halts at the barricade and the survivors come
+        // across the plaza. Finish them off before riding off.
         this.endTimer += dt;
-        if (this.endTimer > 1.2) game.completeLevel();
+        const alive = game._aliveHerdCount();
+        if (alive > 0 && this.endTimer > 2.5 && !this._lastStand) {
+          this._lastStand = true;
+          game.announce('FINISH THEM — LAST STAND');
+        }
+        if (alive === 0 || this.endTimer >= 16) {
+          this._roadClear = true;
+          game.showBigText('ROAD CLEAR', 1.4);
+          this.freeze(1.5);
+        }
       }
     }
   }
@@ -447,6 +482,24 @@ export class LevelManager {
         const pos = this.roadSpawnPos(12 + Math.random() * 10, (Math.random() - 0.5) * (roadW - 4));
         game.enemyManager.spawnBuffalo(i % 3 === 0 ? 'angry' : 'normal', pos);
       }
+      return;
+    }
+
+    if (enc.type === 'stampede') {
+      // Last stand: the finale herd storms in from the plaza, through the
+      // barricade, straight at the halting rail. No escape, no reload break.
+      game.announceForce('THE LAST HERD — THROUGH THE BARRICADE!');
+      game.audio.horn();
+      game.cameraCtrl.addShake(0.35);
+      for (let i = 0; i < count; i++) {
+        const pos = this.beyondPoint(this.rng.range(6, 16), (this.rng.next() - 0.5) * (roadW - 3));
+        game.enemyManager.spawnBuffalo(this.rng.chance(0.35) ? 'angry' : 'normal', pos);
+      }
+      // Dust cloud bursting over the barricade sells the breach.
+      game.particles.spawnBurst(this.beyondPoint(7, 0).setY(1.2), {
+        count: 24, colors: [0xb8a67e, 0x9c8a64, 0xd8c9a8],
+        size: [0.5, 1.2], speed: [2, 5], life: [0.5, 1], gravity: 1.5, grow: 1.5
+      });
       return;
     }
 
