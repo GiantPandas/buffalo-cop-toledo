@@ -418,6 +418,8 @@ export class Game {
     let crit = false;
     if (w.critChance > 0 && Math.random() < w.critChance) { dmg *= 2; crit = true; this.audio.crit(); }
     buffalo.damage(dmg, isHead);
+    // Brown fur chunks fly off away from the player + a dust puff.
+    if (hitPoint) this._spawnHitChunks(hitPoint, isHead);
     // Damage number floating up from the exact hit point.
     if (hitPoint) {
       const sp = this._projectToScreen(hitPoint);
@@ -425,6 +427,35 @@ export class Game {
     }
     const mult = this.score.multiplier;
     if (mult > prevMult && mult >= 3) this.showBigText(`COMBO x${mult} — TOLEDO APPROVES`, 0.8);
+  }
+
+  // Brown chunk burst at the exact hit point (hitPoint carries the raycast
+  // normal): fur debris tumbles away from the player, plus a dust puff.
+  _spawnHitChunks(hitPoint, isHead) {
+    if (!this._hitTmp) { this._hitTmp = new THREE.Vector3(); this._hitDir = new THREE.Vector3(); }
+    const p = this._hitTmp.copy(hitPoint);
+    const dir = this._hitDir.copy(hitPoint).sub(this.camera.position).normalize();
+    if (hitPoint.normal) p.addScaledVector(hitPoint.normal, 0.14);
+    p.addScaledVector(dir, 0.12);
+    this.particles.spawnBurst(p, {
+      count: isHead ? 9 : 12, chunk: true, spin: [5, 14],
+      colors: [0x6b4a2f, 0x5d4130, 0x83603f, 0x4e3a2a, 0x3c2c1e],
+      size: [0.13, 0.3], speed: [2.4, 5.5], life: [0.45, 0.9],
+      gravity: 8.5, dir, dirStrength: 3.2, grow: 0.06, upBias: 0.5
+    });
+    this.particles.spawnBurst(p, {
+      count: 4, colors: [0xe8dcc0, 0xc9b28a],
+      size: [0.18, 0.4], speed: [1, 2.6], life: [0.3, 0.55],
+      gravity: 3, grow: 1.2
+    });
+    if (isHead) {
+      // Horn spark glint on precision hits.
+      this.particles.spawnBurst(p, {
+        count: 6, streak: true, colors: [0xfff2c0, 0xffd97a, 0xffffff],
+        size: [0.14, 0.26], speed: [4, 8], life: [0.08, 0.2],
+        gravity: 1.5, grow: 0
+      });
+    }
   }
 
   _projectToScreen(worldPos) {
@@ -620,7 +651,7 @@ export class Game {
       }
 
       // Particles always update (so muzzle flashes die).
-      this.particles.update(sdt);
+      this.particles.update(sdt, this.camera);
 
       // Crosshair + targeting.
       this._updateCrosshair();

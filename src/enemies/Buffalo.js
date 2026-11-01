@@ -78,6 +78,15 @@ export class Buffalo {
       this.attackCooldown = this.rng.range(0.8, 2.5);
     }
 
+    // Arrival beat: everyone who isn't already sprinting lands with a stomp
+    // and a stare-down, so spawns read as threats instead of furniture.
+    if (this.state === 'idle') {
+      this.state = 'spawn';
+      this.stateTimer = 0;
+      this.spawnDur = this.rng.range(0.55, 0.9);
+    }
+    this.snortTimer = this.rng.range(1.2, 3.2);
+
     game.scene.add(this.group);
 
     // Dust puff + soft thud on arrival so the player registers new spawns.
@@ -180,6 +189,7 @@ export class Buffalo {
     }
 
     switch (this.state) {
+      case 'spawn': this._updateSpawn(dt, camPos); break;
       case 'idle': this._updateIdle(dt, time, camPos, dist); break;
       case 'walk': this._updateWalk(dt, time, camPos, dist); break;
       case 'telegraph': this._updateTelegraph(dt, camPos); break;
@@ -201,6 +211,26 @@ export class Buffalo {
     while (diff > Math.PI) diff -= Math.PI * 2;
     while (diff < -Math.PI) diff += Math.PI * 2;
     this.group.rotation.y += diff * clamp(strength * dt, 0, 1);
+  }
+
+  _updateSpawn(dt, camPos) {
+    // Snort + stomp pose is posed in _animate; just lock onto the player.
+    this._faceToward(camPos, dt, 3);
+    if (this.stateTimer >= this.spawnDur) {
+      this.state = 'idle';
+      this.stateTimer = 0;
+    }
+  }
+
+  // Steam from the nostrils — cheap "this thing is alive and pissed".
+  _snort() {
+    if (!this.game.particles) return;
+    const p = this.parts.muzzle.getWorldPosition(new THREE.Vector3());
+    this.game.particles.spawnBurst(p, {
+      count: 5, colors: [0xe8e2d4, 0xcfc8b6],
+      size: [0.16, 0.32], speed: [0.7, 1.6], life: [0.3, 0.6],
+      gravity: -0.4, grow: 1.6, upBias: 0.8
+    });
   }
 
   _updateIdle(dt, time, camPos, dist) {
@@ -331,6 +361,9 @@ export class Buffalo {
     P.legFR.rotation.x = -swing;
     P.legBL.rotation.x = -swing;
 
+    // Slow breathing — a live animal, not a statue.
+    P.body.scale.y = 1 + Math.sin(t * 1.7) * 0.025;
+
     // Body bob + a little hop on impact.
     const bobAmp = this.state === 'charge' || this.state === 'run' ? 0.12 : 0.035;
     this.group.position.y = (this.dead ? this.group.position.y : 0) + Math.sin(t * speedMul * 4.4) * bobAmp + Math.sin(pain * Math.PI) * 0.18;
@@ -361,9 +394,58 @@ export class Buffalo {
     P.head.rotation.x += Math.sin(pain * Math.PI) * 0.55;
     P.head.rotation.y += Math.sin(pain * 14) * 0.25 * pain;
 
-    // Tail wag (panicked on a hit).
-    P.tail.rotation.x = Math.sin(t * 2.4 + this.headPhase) * 0.25 + Math.sin(pain * Math.PI) * 0.3;
-    P.tail.rotation.z = Math.sin(t * 1.7) * 0.15;
+    // Menace: dominant idle — periodic threat beats (horn-dropping stare,
+    // ground pawing with dust, nostril steam) — plus the arrival pose.
+    if (this.state === 'spawn') {
+      const st = clamp(this.stateTimer / this.spawnDur, 0, 1);
+      const stomp = Math.sin(this.stateTimer * 24);
+      P.legFL.rotation.x = Math.max(0, stomp) * 0.5;
+      P.legFR.rotation.x = Math.max(0, -stomp) * 0.5;
+      // Head up, then slowly lowered into a stare-down as the beat lands.
+      P.head.rotation.x = 0.24 - st * 0.58 + Math.sin(this.stateTimer * 30) * 0.05;
+      P.head.rotation.y = Math.sin(this.stateTimer * 13) * 0.22;
+      this.group.rotation.z = Math.sin(this.stateTimer * 19) * 0.025;
+      this.dustTimer -= dt;
+      if (this.dustTimer <= 0) {
+        this.dustTimer = 0.2;
+        const p = this.group.position.clone(); p.y = 0.25;
+        this.game.particles.spawnBurst(p, {
+          count: 4, colors: [0xb8a67e, 0x9c8a64], size: [0.25, 0.5],
+          speed: [1, 2.2], life: [0.3, 0.55], gravity: 1.2, grow: 1.3
+        });
+      }
+      if (!this._snortedAtSpawn) { this._snortedAtSpawn = true; this._snort(); }
+    } else if (this.state === 'idle' || this.state === 'stagger') {
+      const dist = this.distanceToCamera();
+      const threat = dist < 15 && (this.variant === 'angry' || this.variant === 'security');
+      const cyc = (this.stateTimer + this.walkPhase) % 3.4;
+      const beat = cyc < 0.9 ? 1 - cyc / 0.9 : 0;
+      if (beat > 0) {
+        // Head drops toward the player — horns going down.
+        P.head.rotation.x -= threat ? 0.34 * beat : 0.14 * beat;
+        const paw = Math.sin(cyc * 19) * beat;
+        P.legFL.rotation.x += Math.max(0, paw) * 0.34;
+        P.legFR.rotation.x += Math.max(0, -paw) * 0.34;
+        this.group.rotation.z += Math.sin(cyc * 16) * 0.014 * beat;
+        if (beat > 0.75 && this.rng.chance(dt * 5)) {
+          const p = this.group.position.clone(); p.y = 0.22;
+          this.game.particles.spawnBurst(p, {
+            count: 3, colors: [0xb8a67e], size: [0.2, 0.4],
+            speed: [0.8, 1.8], life: [0.25, 0.5], gravity: 1, grow: 1.2
+          });
+        }
+      }
+      this.snortTimer -= dt;
+      if (this.snortTimer <= 0 && dist < 16) {
+        this.snortTimer = this.rng.range(2, 4.2);
+        if (threat || beat > 0.4) this._snort();
+      }
+    }
+
+    // Tail: irritated flick (fast for angry types), panicked thrash on a hit.
+    const tailSpeed = (this.variant === 'angry' || this.variant === 'security') ? 4.4 : 2.4;
+    P.tail.rotation.x = Math.sin(t * tailSpeed + this.headPhase) * 0.25 + Math.sin(pain * Math.PI) * 0.3;
+    P.tail.rotation.z = Math.sin(t * tailSpeed * 0.7) * 0.15;
 
     // Charge lean.
     const targetLean = (this.state === 'charge' || this.state === 'run') ? -0.18 : 0;

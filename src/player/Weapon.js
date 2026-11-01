@@ -147,6 +147,30 @@ export class Weapon {
     this._boltTimer = 0;
     this._boltBaseZ = BOLT_Z;
     this._tip = new THREE.Vector3();
+
+    // ---- Brass shell casings: pooled instances ejected from the port ----
+    this._CASINGS = 42;
+    this._casingMesh = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(0.016, 0.014, 0.052, 6),
+      new THREE.MeshLambertMaterial({ color: 0xd9a441, flatShading: true }),
+      this._CASINGS
+    );
+    this._casingMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this._casingMesh.frustumCulled = false;
+    this._casingDummy = new THREE.Object3D();
+    this._casings = [];
+    for (let i = 0; i < this._CASINGS; i++) {
+      this._casings.push({
+        active: false, parked: false, life: 0,
+        pos: new THREE.Vector3(), vel: new THREE.Vector3(),
+        rot: new THREE.Euler(), spin: new THREE.Vector3()
+      });
+    }
+    game.scene.add(this._casingMesh);
+    this._portLocal = new THREE.Vector3(0.05, 0.07, 0.05); // ejection port (right of bolt housing)
+    this._sparkRay = new THREE.Raycaster();
+    this._sparkPt = new THREE.Vector3();
+    this._sparkDir = new THREE.Vector3();
   }
 
   get canFire() { return !this.reloading && this.ammo > 0 && this.cooldown <= 0; }
@@ -167,6 +191,7 @@ export class Weapon {
     this.bloom = 0;
     this.spreadScale = 1;
     this._jitter.x = this._jitter.y = this._jitter.tx = this._jitter.ty = 0;
+    for (const c of this._casings) { c.active = false; c.parked = false; }
     this.ammo = this.magSize;
     this.cooldown = 0;
     this.reloading = false;
@@ -194,6 +219,7 @@ export class Weapon {
     game.audio.shoot();
     game.cameraCtrl.addRecoil(this.recoil);
     game.score.shotFired();
+    this._ejectCasing();
 
     // Raycast from camera through the (sensitivity-scaled + bloomed) aim point.
     const sens = game.options.sensitivity;
@@ -229,8 +255,72 @@ export class Weapon {
       if (pierceLeft > 0) { pierceLeft--; continue; } // Hollow Points: keep going.
       break;
     }
-    if (!resolved) game.onMiss();
+    if (!resolved) {
+      game.onMiss();
+      this._sparkImpact();
+    }
     return true;
+  }
+
+  // Brass casing pops out of the ejection port: right, up, tumbling. Lives in
+  // world space so the moving rail leaves it behind — it flies off screen.
+  _ejectCasing() {
+    const game = this.game;
+    let cs = null;
+    for (const c of this._casings) if (!c.active) { cs = c; break; }
+    if (!cs) return;
+    cs.active = true;
+    cs.parked = false;
+    cs.life = 0;
+    cs.pos.copy(this._portLocal);
+    this.model.localToWorld(cs.pos);
+    const q = game.camera.quaternion;
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
+    cs.vel.copy(right).multiplyScalar(2.4 + Math.random() * 1.8)
+      .addScaledVector(up, 1.3 + Math.random() * 1.1)
+      .addScaledVector(fwd, 0.3 + Math.random() * 0.6);
+    cs.rot.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+    cs.spin.set(
+      (Math.random() - 0.5) * 26, (Math.random() - 0.5) * 26, (Math.random() - 0.5) * 26);
+  }
+
+  // Sparks where a missed bullet smacks into world geometry (asphalt, walls).
+  _sparkImpact() {
+    const game = this.game;
+    const pm = game.particles;
+    if (!pm || !game.levelManager.world) return;
+    this._sparkRay.set(this.raycaster.ray.origin, this.raycaster.ray.direction);
+    this._sparkRay.far = 90;
+    const hits = this._sparkRay.intersectObject(game.levelManager.world.root, true);
+    const p = this._sparkPt;
+    if (hits.length > 0) {
+      p.copy(hits[0].point);
+      if (hits[0].normal) {
+        p.addScaledVector(hits[0].normal, 0.16);
+        this._sparkDir.copy(hits[0].normal);
+      } else {
+        this._sparkDir.copy(p).sub(game.camera.position).normalize();
+      }
+    } else {
+      // No surface within reach: puff where the ground would be, else 50m out.
+      const d = this.raycaster.ray.direction;
+      const t = d.y < -0.02 ? Math.min(60, Math.max(4, -this.raycaster.ray.origin.y / d.y)) : 50;
+      p.copy(this.raycaster.ray.origin).addScaledVector(d, t);
+      this._sparkDir.set(0, 1, 0);
+    }
+    pm.spawnBurst(p, {
+      count: 8, streak: true,
+      colors: [0xffe08a, 0xffa53b, 0xfff7d0, 0xff7a2e],
+      size: [0.1, 0.2], speed: [3.5, 7.5], life: [0.1, 0.26],
+      gravity: 9, dir: this._sparkDir, dirStrength: 2.5, grow: 0, upBias: 0.6
+    });
+    pm.spawnBurst(p, {
+      count: 3, colors: [0xfff2c0, 0xffb060],
+      size: [0.14, 0.26], speed: [0.6, 1.6], life: [0.12, 0.24],
+      gravity: 0.5, grow: 0.9
+    });
   }
 
   _headHit(hits, owner) {
@@ -309,6 +399,48 @@ export class Weapon {
       this._boltTimer -= dt;
     } else {
       this.bolt.position.z = this._boltBaseZ;
+    }
+
+    // Casings: fly out, tumble, bounce off the asphalt, die after 1.8s.
+    {
+      const cm = this._casingMesh;
+      const dummy = this._casingDummy;
+      let dirty = false;
+      for (let i = 0; i < this._casings.length; i++) {
+        const c = this._casings[i];
+        if (!c.active) {
+          if (c.parked) continue;
+          dummy.position.set(0, -60, 0);
+          dummy.rotation.set(0, 0, 0);
+          dummy.scale.setScalar(0.0001);
+          dummy.updateMatrix();
+          cm.setMatrixAt(i, dummy.matrix);
+          c.parked = true;
+          dirty = true;
+          continue;
+        }
+        dirty = true;
+        c.life += dt;
+        c.vel.y -= 9.8 * dt;
+        c.pos.addScaledVector(c.vel, dt);
+        if (c.pos.y < 0.026) {
+          c.pos.y = 0.026;
+          if (c.vel.y < 0) {
+            c.vel.y *= -0.32;
+            c.vel.x *= 0.55; c.vel.z *= 0.55;
+          }
+          c.spin.multiplyScalar(0.55);
+          if (Math.abs(c.vel.y) < 0.7) c.vel.y = 0;
+        }
+        c.rot.x += c.spin.x * dt; c.rot.y += c.spin.y * dt; c.rot.z += c.spin.z * dt;
+        dummy.position.copy(c.pos);
+        dummy.rotation.copy(c.rot);
+        dummy.scale.setScalar(1);
+        dummy.updateMatrix();
+        cm.setMatrixAt(i, dummy.matrix);
+        if (c.life > 1.8) { c.active = false; c.parked = false; }
+      }
+      if (dirty) cm.instanceMatrix.needsUpdate = true;
     }
 
     // Status strip: cyan ready, amber low ammo, red reloading/empty.
