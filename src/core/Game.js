@@ -42,6 +42,10 @@ export class Game {
     this.score = new ScoreManager();
     this.upgradePool = [...UPGRADE_IDS]; // remaining picks for this run
     this._lastUpgrade = null;
+    // Mechanic flags set by rare/epic upgrades (see systems/upgrades.js).
+    this.luckyMiss = false;   // LUCKY TIE: some misses spare the combo
+    this.stunOnKill = false;  // FLASH STEER: kills stun nearby buffalo
+    this.killCash = 0;        // CHROME BUMPER: bounty paid per kill
 
     // Renderer (graceful fallback if WebGL is unavailable).
     let renderer;
@@ -338,16 +342,32 @@ export class Game {
     this.player.resetRun();
     this.upgradePool = [...UPGRADE_IDS];
     this._lastUpgrade = null;
+    this.luckyMiss = false;
+    this.stunOnKill = false;
+    this.killCash = 0;
     this.ui.setMagSize(this.player.weapon.magSize);
   }
 
   _rollUpgrades() {
+    // Rarity-weighted draft: commons are plentiful, epics a rare thrill.
+    // Never re-offers the last pick (run is short; variety is the fun).
+    const weight = { common: 2.4, rare: 1.6, epic: 1 };
+    const defOf = (id) => UPGRADES.find((u) => u.id === id);
     const ids = [...this.upgradePool];
-    for (let i = ids.length - 1; i > 0; i--) {
-      const j = (Math.random() * (i + 1)) | 0;
-      [ids[i], ids[j]] = [ids[j], ids[i]];
+    if (ids.length > 1) ids.splice(ids.indexOf(this._lastUpgrade), 1);
+    const picks = [];
+    while (picks.length < 3 && ids.length > 0) {
+      let total = 0;
+      for (const id of ids) total += weight[defOf(id).rarity];
+      let r = Math.random() * total;
+      let idx = 0;
+      for (let i = 0; i < ids.length; i++) {
+        r -= weight[defOf(ids[i]).rarity];
+        if (r <= 0) { idx = i; break; }
+      }
+      picks.push(ids.splice(idx, 1)[0]);
     }
-    return ids.slice(0, 3).map((id) => UPGRADES.find((u) => u.id === id));
+    return picks.map(defOf);
   }
 
   pickUpgrade(id) {
@@ -357,7 +377,7 @@ export class Game {
     def.apply(this);
     this._lastUpgrade = id;
     this.upgradePool.splice(this.upgradePool.indexOf(id), 1);
-    if (id === 'magsize') this.ui.setMagSize(this.player.weapon.magSize);
+    if (id === 'magsize' || id === 'fullthrottle') this.ui.setMagSize(this.player.weapon.magSize);
     this.audio.uiSelect();
     if (this._pickIsLoadout) {
       // Loadout picked: roll to the briefing for mission one.
@@ -470,6 +490,31 @@ export class Game {
 
   onBuffaloKilled(buffalo) {
     this.stats.killed++;
+    if (this.killCash > 0) {
+      // CHROME BUMPER: the city pays per head.
+      const bounty = Math.round(this.killCash * this.score.bonusMul);
+      this.score.addFlat(bounty);
+      this.ui.updateScore(this.score.score);
+    }
+    if (this.stunOnKill) {
+      // FLASH STEER: the kill pops a flash that rattles nearby buffalo.
+      const pos = buffalo.group.position;
+      for (const other of this.enemyManager.buffalos) {
+        if (other !== buffalo && other.alive && other.variant !== 'boss' &&
+            other.group.position.distanceTo(pos) <= 9) {
+          other.forceStagger(1.6);
+        }
+      }
+      this.particles.spawnBurst(pos.clone().setY(1.3), {
+        count: 16,
+        colors: [0xffffff, 0xf4d67a, 0xfff2c0],
+        speed: [6, 13],
+        size: [0.25, 0.6],
+        life: [0.14, 0.28],
+        gravity: 0,
+        grow: 1.6,
+      });
+    }
     if (buffalo.variant === 'bandit') this.onBanditKilled(buffalo);
     if (this.focus.active) {
       if (this._aliveHerdCount() === 0) {
@@ -573,6 +618,7 @@ export class Game {
   }
 
   onMiss() {
+    if (this.luckyMiss && Math.random() < 0.35) return; // LUCKY TIE keeps the streak
     this.score.breakCombo();
     this.ui.showCombo();
   }

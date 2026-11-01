@@ -123,28 +123,44 @@ check(!!CONFIG.buffalos.bandit, 'config: donut bandit variant exists');
         magSize: CONFIG.weapon.magSize, fireCooldown: CONFIG.weapon.fireCooldown,
         reloadTime: CONFIG.weapon.reloadTime, recoil: CONFIG.weapon.recoil,
         damage: CONFIG.weapon.damage, ammo: CONFIG.weapon.magSize,
-        critChance: 0, pierce: 0, headshotBonus: 0, spreadScale: 1
+        critChance: 0, pierce: 0, headshotBonus: 0, spreadScale: 1, holdRamp: 0,
+        addStat(stat, delta) { this[stat] += delta; if (stat === 'magSize') this.ammo = this.magSize; }
       },
-      maxHp: 100, hp: 100, damageReduction: 0, flatDamageReduction: 0
+      maxHp: 100, hp: 100, damageReduction: 0, flatDamageReduction: 0,
+      heal(n) { this.hp = Math.min(this.maxHp, this.hp + n); }
     },
     score: { bonusMul: 1 }
   });
   check(UPGRADES.length >= 3, `upgrades: pool has ${UPGRADES.length} entries`);
   const ids = new Set(UPGRADES.map((u) => u.id));
   check(ids.size === UPGRADES.length, 'upgrades: unique ids');
+  const rarities = UPGRADES.map((u) => u.rarity);
+  check(rarities.every((r) => r === 'common' || r === 'rare' || r === 'epic'), 'upgrades: valid rarity on every def');
+  check(new Set(rarities).size >= 2, 'upgrades: rarity tiers present');
   for (const u of UPGRADES) {
+    check(!!u.icon && !!u.flavor, `upgrade ${u.id} has icon + flavor`);
     const g = base(); u.apply(g);
     const w = g.player.weapon;
     check(Number.isFinite(w.damage + w.magSize + w.fireCooldown + w.spreadScale), `upgrade ${u.id} leaves finite stats`);
   }
   let g = base(); UPGRADES.find((u) => u.id === 'magsize').apply(g);
   check(g.player.weapon.magSize === CONFIG.weapon.magSize + 10 && g.player.weapon.ammo === CONFIG.weapon.magSize + 10, 'drum mag: +10 and tops off mag');
-  g = base(); UPGRADES.find((u) => u.id === 'damage').apply(g);
-  check(g.player.weapon.damage === 2, 'damage: +1 per shot');
-  g = base(); UPGRADES.find((u) => u.id === 'rof').apply(g);
-  check(g.player.weapon.fireCooldown < CONFIG.weapon.fireCooldown, `rof: faster (${g.player.weapon.fireCooldown.toFixed(3)})`);
-  g = base(); UPGRADES.find((u) => u.id === 'bloom').apply(g);
-  check(g.player.weapon.spreadScale < 1, `bloom: spread reduced (${g.player.weapon.spreadScale.toFixed(2)})`);
+  g = base(); UPGRADES.find((u) => u.id === 'hairtrigger').apply(g);
+  check(g.player.weapon.damage === CONFIG.weapon.damage + 1, 'hair trigger: +1 per shot');
+  g = base(); UPGRADES.find((u) => u.id === 'sights').apply(g);
+  check(g.player.weapon.spreadScale < 1, `dot sight: spread reduced (${g.player.weapon.spreadScale.toFixed(2)})`);
+  g = base(); UPGRADES.find((u) => u.id === 'triggerfinger').apply(g);
+  check(g.player.weapon.holdRamp > 0, 'trigger finger: hold ramp armed');
+  g = base(); UPGRADES.find((u) => u.id === 'fullthrottle').apply(g);
+  check(g.player.weapon.fireCooldown < CONFIG.weapon.fireCooldown && g.player.weapon.magSize > CONFIG.weapon.magSize, 'full throttle: faster + deeper drum');
+  g = base(); UPGRADES.find((u) => u.id === 'lucky').apply(g);
+  check(g.luckyMiss === true, 'lucky tie: combo-saver flag set');
+  g = base(); UPGRADES.find((u) => u.id === 'chrome').apply(g);
+  check(g.killCash >= 150, 'chrome bumper: bounty per kill');
+  g = base(); UPGRADES.find((u) => u.id === 'flashbang').apply(g);
+  check(g.stunOnKill === true, 'flash steer: kill-stun flag set');
+  g = base(); UPGRADES.find((u) => u.id === 'plate').apply(g);
+  check(g.player.flatDamageReduction >= 1 && g.player.hp > 90, 'ram plating: flat reduction + heal');
 }
 
 console.log(failures === 0 ? '\nALL SMOKE TESTS PASSED' : `\n${failures} FAILURES`);

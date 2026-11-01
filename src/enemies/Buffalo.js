@@ -100,6 +100,15 @@ export class Buffalo {
 
   get alive() { return !this.dead; }
 
+  // FLASH STEER upgrade: a nearby kill flashes this buffalo out of its posture.
+  // Charging herds can't be interrupted mid-charge — that stays a fair fight.
+  forceStagger(seconds) {
+    if (this.dead || this.state === 'charging') return;
+    this.state = 'stagger';
+    this.stateTimer = 0;
+    this.staggerTime = seconds;
+  }
+
   // World-space point at chest height (for effects / AI).
   chestPos(out) {
     return out.setFromMatrixPosition(this.group.matrixWorld).add(

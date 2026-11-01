@@ -17,7 +17,9 @@ export class Weapon {
     this.pierce = 0;      // extra buffalo a bullet can pass through
     this.headshotBonus = 0;
     this.bloom = 0;         // 0..1 trigger-hold spread bloom
-    this.spreadScale = 1;   // TRIGGER CONTROL upgrade multiplies this down
+    this.spreadScale = 1;   // DOT SIGHT upgrade multiplies this down
+    this.holdRamp = 0;      // TRIGGER FINGER upgrade: sustained-fire rate bonus
+    this._holdTime = 0;
     this._jitter = { x: 0, y: 0, tx: 0, ty: 0 }; // smooth aim wobble vector
     this.ammo = this.magSize;
     this.cooldown = 0;
@@ -175,8 +177,16 @@ export class Weapon {
 
   get canFire() { return !this.reloading && this.ammo > 0 && this.cooldown <= 0; }
 
-  // Current visual spread bloom (0..1), scaled by the TRIGGER CONTROL upgrade.
+  // Current visual spread bloom (0..1), scaled by the DOT SIGHT upgrade.
   get aimBloom() { return Math.min(1, this.bloom * this.spreadScale); }
+
+  // TRIGGER FINGER: holding the trigger steadily tightens the cooldown,
+  // ramping the fire rate toward +40% after ~1.5s of sustained spray.
+  _cooldownMul() {
+    if (this.holdRamp <= 0) return 1;
+    const ramp = Math.min(1, Math.max(0, (this._holdTime - 0.45) / 1.1));
+    return 1 / (1 + this.holdRamp * ramp);
+  }
 
   // Restore base stats + a full mag (called on a fresh run).
   reset() {
@@ -190,6 +200,8 @@ export class Weapon {
     this.headshotBonus = 0;
     this.bloom = 0;
     this.spreadScale = 1;
+    this.holdRamp = 0;
+    this._holdTime = 0;
     this._jitter.x = this._jitter.y = this._jitter.tx = this._jitter.ty = 0;
     for (const c of this._casings) { c.active = false; c.parked = false; }
     this.ammo = this.magSize;
@@ -208,7 +220,7 @@ export class Weapon {
     }
 
     this.ammo--;
-    this.cooldown = this.fireCooldown;
+    this.cooldown = this.fireCooldown * this._cooldownMul();
     this.kick = 1;
     this.bloom = Math.min(1, this.bloom + CONFIG.weapon.bloomPerShot);
     this._flashTimer = 0.05;
@@ -343,6 +355,10 @@ export class Weapon {
     const game = this.game;
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.kick = Math.max(0, this.kick - dt * 7);
+    if (this.holdRamp > 0) {
+      if (game.input.firing && !this.reloading) this._holdTime += dt;
+      else this._holdTime = Math.max(0, this._holdTime - dt * 3);
+    }
 
     // Convergence: bloom relaxes when you let off; the aim wobble drifts
     // smoothly so spraying walks the shots around instead of teleporting them.

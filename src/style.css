@@ -293,14 +293,23 @@ html, body {
 .upg-sub { font-size: 13px; letter-spacing: 2px; color: #9fc4e8; margin-bottom: 22px; }
 #upgrade-grid { display: flex; flex-direction: column; gap: 14px; }
 .upg-card {
-  pointer-events: auto; cursor: pointer; text-align: left; width: 460px;
+  pointer-events: auto; cursor: pointer; text-align: left; width: 470px;
+  display: flex; align-items: flex-start; gap: 16px;
   font-family: inherit; color: #cfeaff; background: rgba(20,45,80,0.6);
-  border: 2px solid #ffd23e; padding: 16px 22px;
-  transition: all 0.08s;
+  border: 2px solid var(--rc, #ffd23e); padding: 14px 20px;
+  animation: upg-in 0.35s ease both; transition: all 0.1s;
 }
-.upg-card:hover { background: rgba(160,110,20,0.55); box-shadow: 0 0 18px rgba(255,200,60,0.8); transform: scale(1.02); }
+.upg-card:hover { background: rgba(160,110,20,0.45); box-shadow: 0 0 22px var(--rg, rgba(255,200,60,0.8)); transform: translateY(-3px) scale(1.02); }
+.upg-card .uc-icon { font-size: 26px; line-height: 1.2; filter: drop-shadow(0 0 6px var(--rg, rgba(255,200,60,0.7))); }
+.upg-card .uc-rarity { font-size: 10px; letter-spacing: 4px; color: var(--rc, #ffd23e); opacity: 0.85; }
 .upg-card .uc-name { font-size: 18px; letter-spacing: 3px; font-weight: bold; color: #ffe9a0; text-shadow: 0 0 8px rgba(255,210,62,0.6); }
-.upg-card .uc-desc { font-size: 13px; letter-spacing: 1px; color: #7fd4ff; margin-top: 5px; }
+.upg-card .uc-desc { font-size: 13px; letter-spacing: 1px; color: #7fd4ff; margin-top: 4px; }
+.upg-card .uc-flavor { font-size: 11px; font-style: italic; color: #8ba3bd; margin-top: 6px; }
+.upg-card.r-common { --rc: #8fb8dd; --rg: rgba(140,190,230,0.55); }
+.upg-card.r-rare { --rc: #46c8ff; --rg: rgba(70,200,255,0.7); }
+.upg-card.r-epic { --rc: #ffd23e; --rg: rgba(255,210,62,0.9); box-shadow: 0 0 14px rgba(255,210,62,0.35); }
+.upg-card.r-epic .uc-name { color: #fff3c4; }
+@keyframes upg-in { from { opacity: 0; transform: translateY(14px) scale(0.97); } to { opacity: 1; transform: none; } }
 
 /* Game over / victory */
 .go-title { font-size: 46px; letter-spacing: 6px; color: #ff5252; text-shadow: 0 0 20px rgba(255,60,60,0.8); }

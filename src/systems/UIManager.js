@@ -246,18 +246,24 @@ export class UIManager {
 
   showUpgrades(options, title) {
     const t = document.getElementById('upg-title');
-    if (t) t.textContent = title || 'CHOOSE AN UPGRADE';
+    if (t) t.textContent = title || 'CHOOSE YOUR NEXT EDGE';
     const grid = document.getElementById('upgrade-grid');
     grid.innerHTML = '';
-    for (const u of options) {
+    options.forEach((u, i) => {
       const card = document.createElement('button');
-      card.className = 'upg-card';
+      card.className = `upg-card r-${u.rarity}`;
       card.innerHTML = `
-        <div class="uc-name">${u.name}</div>
-        <div class="uc-desc">${u.desc}</div>`;
+        <div class="uc-icon">${u.icon}</div>
+        <div class="uc-body">
+          <div class="uc-rarity">${u.rarity}</div>
+          <div class="uc-name">${u.name}</div>
+          <div class="uc-desc">${u.desc}</div>
+          <div class="uc-flavor">${u.flavor}</div>
+        </div>`;
+      card.style.animationDelay = `${i * 0.14}s`;
       card.addEventListener('click', () => { this.game.audio.uiSelect(); this.game.pickUpgrade(u.id); });
       grid.appendChild(card);
-    }
+    });
     this.showScreen('screen-upgrades');
   }
 
